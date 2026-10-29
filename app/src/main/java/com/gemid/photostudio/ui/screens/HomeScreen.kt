@@ -29,7 +29,6 @@ import androidx.compose.material.icons.rounded.PhotoLibrary
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -57,7 +56,6 @@ import androidx.core.content.FileProvider
 import androidx.navigation.NavController
 import com.gemid.photostudio.navigation.Screen
 import com.gemid.photostudio.ui.theme.AccentCyan
-import com.gemid.photostudio.ui.theme.AccentTeal
 import com.gemid.photostudio.ui.theme.Navy10
 import com.gemid.photostudio.ui.theme.Navy15
 import com.gemid.photostudio.ui.theme.Navy20
@@ -65,10 +63,9 @@ import com.gemid.photostudio.ui.viewmodel.StudioViewModel
 import com.gemid.photostudio.util.ImageUtils
 
 /**
- * Ultra-simplified Home Screen:
- * Stripped of all complex dashboards. Provides just two large, high-contrast buttons:
- * "Open Camera" and "Choose from Gallery". Both immediately normalize the image and
- * transition straight into Edit Mode.
+ * Simplified Canva-Grade Home Screen:
+ * Directly launches camera capture or gallery picker, immediately normalizes the image,
+ * and navigates automatically into Edit Mode (StudioEditorScreen) with zero delays.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -80,23 +77,25 @@ fun HomeScreen(
     val snackbarHostState = remember { SnackbarHostState() }
     var tempCameraUri by remember { mutableStateOf<Uri?>(null) }
 
-    // Camera Launcher
+    // Camera Capture Launcher: normalizes & transitions instantly
     val cameraLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.TakePicture()
     ) { success ->
         if (success && tempCameraUri != null) {
-            viewModel.loadPhoto(context, tempCameraUri!!)
-            navController.navigate(Screen.Studio.route)
+            viewModel.loadPhoto(context, tempCameraUri!!) {
+                navController.navigate(Screen.Studio.route)
+            }
         }
     }
 
-    // Gallery Picker Launcher
+    // Gallery Picker Launcher: normalizes & transitions instantly
     val galleryLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.PickVisualMedia()
     ) { uri: Uri? ->
         if (uri != null) {
-            viewModel.loadPhoto(context, uri)
-            navController.navigate(Screen.Studio.route)
+            viewModel.loadPhoto(context, uri) {
+                navController.navigate(Screen.Studio.route)
+            }
         }
     }
 
@@ -113,15 +112,15 @@ fun HomeScreen(
                 title = {
                     Column {
                         Text(
-                            text = "GemID Studio",
+                            text = "GemID Photo Studio",
                             fontWeight = FontWeight.Black,
                             fontSize = 20.sp,
                             color = Color.White
                         )
                         Text(
-                            text = "Instant Passport & ID Photo Maker",
+                            text = "Instant ID & Passport Photo Suite",
                             fontSize = 12.sp,
-                            color = Color.LightGray
+                            color = Color(0xFF94A3B8)
                         )
                     }
                 },
@@ -145,45 +144,41 @@ fun HomeScreen(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.Center
             ) {
-                // Header Badge
+                // Studio Quality Badge
                 Surface(
                     shape = RoundedCornerShape(20.dp),
-                    color = AccentCyan.copy(alpha = 0.15f),
-                    border = androidx.compose.foundation.BorderStroke(1.dp, AccentCyan.copy(alpha = 0.4f)),
+                    color = AccentCyan.copy(alpha = 0.12f),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, AccentCyan.copy(alpha = 0.35f)),
                     modifier = Modifier.padding(bottom = 24.dp)
                 ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = "⚡ SPEED & SHOP READY • 300 DPI",
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = AccentCyan
-                        )
-                    }
+                    Text(
+                        text = "CANVA-GRADE STUDIO • 300 DPI LAB QUALITY",
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = AccentCyan,
+                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp)
+                    )
                 }
 
                 Text(
                     text = "Select a Photo to Begin",
-                    fontSize = 22.sp,
-                    fontWeight = FontWeight.Bold,
+                    fontSize = 24.sp,
+                    fontWeight = FontWeight.Black,
                     color = Color.White,
                     modifier = Modifier.padding(bottom = 8.dp)
                 )
 
                 Text(
-                    text = "Normalize, crop, change background, and print in seconds",
+                    text = "Instant background removal, standard templates, and minilab sheet layouts",
                     fontSize = 13.sp,
-                    color = Color.Gray,
+                    color = Color(0xFF94A3B8),
                     modifier = Modifier.padding(bottom = 32.dp)
                 )
 
                 // ── Button 1: Open Camera ─────────────────────────────────
-                LargeActionCard(
+                CanvaActionCard(
                     title = "Open Camera",
-                    subtitle = "Snap fresh photo with auto-leveling",
+                    subtitle = "Capture fresh photo with EXIF auto-orientation",
                     icon = Icons.Rounded.CameraAlt,
                     gradientColors = listOf(Color(0xFF00B4D8), Color(0xFF0077B6)),
                     onClick = {
@@ -201,11 +196,11 @@ fun HomeScreen(
                 Spacer(modifier = Modifier.height(20.dp))
 
                 // ── Button 2: Choose from Gallery ─────────────────────────
-                LargeActionCard(
+                CanvaActionCard(
                     title = "Choose from Gallery",
-                    subtitle = "Pick from phone storage or downloads",
+                    subtitle = "Pick from device storage or downloads",
                     icon = Icons.Rounded.PhotoLibrary,
-                    gradientColors = listOf(Color(0xFF7209B7), Color(0xFF4361EE)),
+                    gradientColors = listOf(Color(0xFF7C3AED), Color(0xFF4F46E5)),
                     onClick = {
                         galleryLauncher.launch(
                             PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
@@ -214,7 +209,7 @@ fun HomeScreen(
                 )
             }
 
-            // Loading overlay
+            // Immediate Loading Overlay
             AnimatedVisibility(
                 visible = viewModel.isLoading,
                 enter = fadeIn(),
@@ -223,25 +218,32 @@ fun HomeScreen(
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
-                        .background(Color.Black.copy(alpha = 0.7f)),
+                        .background(Color.Black.copy(alpha = 0.75f)),
                     contentAlignment = Alignment.Center
                 ) {
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.Center
+                    Surface(
+                        shape = RoundedCornerShape(16.dp),
+                        color = Navy15,
+                        border = androidx.compose.foundation.BorderStroke(1.dp, AccentCyan.copy(alpha = 0.5f))
                     ) {
-                        CircularProgressIndicator(
-                            color = AccentCyan,
-                            strokeWidth = 3.dp,
-                            modifier = Modifier.size(48.dp)
-                        )
-                        Spacer(modifier = Modifier.height(16.dp))
-                        Text(
-                            text = viewModel.loadingMessage,
-                            color = Color.White,
-                            fontSize = 14.sp,
-                            fontWeight = FontWeight.Medium
-                        )
+                        Column(
+                            modifier = Modifier.padding(28.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.Center
+                        ) {
+                            CircularProgressIndicator(
+                                color = AccentCyan,
+                                strokeWidth = 3.dp,
+                                modifier = Modifier.size(48.dp)
+                            )
+                            Spacer(modifier = Modifier.height(16.dp))
+                            Text(
+                                text = viewModel.loadingMessage,
+                                color = Color.White,
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                        }
                     }
                 }
             }
@@ -250,7 +252,7 @@ fun HomeScreen(
 }
 
 @Composable
-private fun LargeActionCard(
+private fun CanvaActionCard(
     title: String,
     subtitle: String,
     icon: ImageVector,
@@ -309,7 +311,7 @@ private fun LargeActionCard(
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(
                     text = subtitle,
-                    color = Color.LightGray,
+                    color = Color(0xFFCBD5E1),
                     fontSize = 12.sp,
                     lineHeight = 16.sp
                 )

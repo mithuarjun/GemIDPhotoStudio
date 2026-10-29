@@ -76,12 +76,31 @@ object ImageProcessor {
             isAntiAlias = true
         }
 
-        // 3. Draw Photos into each Grid Cell, looping through photo queue
+        // 3. Draw Photos into each Grid Cell with Zero-Wastage Aspect-Ratio Preserving Center-Crop
         if (photos.isNotEmpty()) {
+            val numPhotos = photos.size
+            val totalSlots = grid.cells.size
+            val slotsPerPhoto = maxOf(1, totalSlots / numPhotos)
+
             for (cell in grid.cells) {
-                // Automatically loops through the photo list
-                val photoToDraw = photos[cell.index % photos.size]
-                val srcRect = Rect(0, 0, photoToDraw.width, photoToDraw.height)
+                // Smart Multi-Image Queue: Divides slots evenly
+                val photoIndex = minOf(cell.index / slotsPerPhoto, numPhotos - 1)
+                val photoToDraw = photos[photoIndex]
+
+                val cellW = cell.bounds.width()
+                val cellH = cell.bounds.height()
+                val cellAspect = if (cellH > 0f) cellW / cellH else 1.0f
+                val photoAspect = if (photoToDraw.height > 0) photoToDraw.width.toFloat() / photoToDraw.height.toFloat() else 1.0f
+
+                val srcRect = if (photoAspect > cellAspect) {
+                    val targetW = (photoToDraw.height * cellAspect).toInt().coerceAtMost(photoToDraw.width)
+                    val offsetX = ((photoToDraw.width - targetW) / 2).coerceAtLeast(0)
+                    Rect(offsetX, 0, offsetX + targetW, photoToDraw.height)
+                } else {
+                    val targetH = (photoToDraw.width / cellAspect).toInt().coerceAtMost(photoToDraw.height)
+                    val offsetY = ((photoToDraw.height - targetH) / 2).coerceAtLeast(0)
+                    Rect(0, offsetY, photoToDraw.width, offsetY + targetH)
+                }
 
                 canvas.drawBitmap(photoToDraw, srcRect, cell.bounds, photoPaint)
 
@@ -103,51 +122,29 @@ object ImageProcessor {
             }
         }
 
-        // 4. Dashed Crop Guidelines & Hairline Crop Lines
+        // 4. Interior Cut Lines & Intersection Crosshairs (Zero Paper Wastage)
         if (showScissorMarks || showBorders) {
+            val solidLinePaint = Paint().apply {
+                color = if (showBorders) borderColor else Color.argb(190, 160, 160, 160)
+                strokeWidth = maxOf(1.2f, grid.sheetWidthPx * 0.0006f)
+                style = Paint.Style.STROKE
+                isAntiAlias = true
+            }
+
             val dashedPaint = Paint().apply {
-                color = if (showBorders) borderColor else Color.argb(180, 160, 160, 160)
+                color = if (showBorders) borderColor else Color.argb(180, 150, 150, 150)
                 strokeWidth = maxOf(1.5f, borderWidth * 0.75f)
                 style = Paint.Style.STROKE
                 pathEffect = DashPathEffect(floatArrayOf(16f, 12f), 0f)
                 isAntiAlias = true
             }
 
-            val solidLinePaint = Paint().apply {
-                color = if (showBorders) borderColor else Color.argb(200, 140, 140, 140)
-                strokeWidth = maxOf(1.2f, grid.sheetWidthPx * 0.0007f)
-                style = Paint.Style.STROKE
-                isAntiAlias = true
-            }
-
-            // Outer margin cutting ticks (extending to sheet edge)
+            // Draw interior dividing cut lines between photos
             for (line in grid.cutLines) {
-                canvas.drawLine(line.startX, line.startY, line.endX, line.endY, solidLinePaint)
+                canvas.drawLine(line.startX, line.startY, line.endX, line.endY, dashedPaint)
             }
 
-            // Dashed lines between photo columns
-            for (col in 0 until grid.cols) {
-                val left = grid.marginXPx + (col * (grid.photoWidthPx + grid.spacingXPx))
-                val right = left + grid.photoWidthPx
-
-                if (col < grid.cols - 1 && grid.spacingXPx > 0) {
-                    val midX = right + (grid.spacingXPx / 2f)
-                    canvas.drawLine(midX, grid.marginYPx, midX, grid.sheetHeightPx - grid.marginYPx, dashedPaint)
-                }
-            }
-
-            // Dashed lines between photo rows
-            for (row in 0 until grid.rows) {
-                val top = grid.marginYPx + (row * (grid.photoHeightPx + grid.spacingYPx))
-                val bottom = top + grid.photoHeightPx
-
-                if (row < grid.rows - 1 && grid.spacingYPx > 0) {
-                    val midY = bottom + (grid.spacingYPx / 2f)
-                    canvas.drawLine(grid.marginXPx, midY, grid.sheetWidthPx - grid.marginXPx, midY, dashedPaint)
-                }
-            }
-
-            // Corner crosshairs at intersections
+            // Corner crosshairs at interior intersections
             val arm = maxOf(10f, grid.sheetWidthPx * 0.008f)
             for (ch in grid.crosshairs) {
                 canvas.drawLine(ch.x - arm, ch.y, ch.x + arm, ch.y, solidLinePaint)
@@ -155,52 +152,26 @@ object ImageProcessor {
             }
         }
 
-        // 5. Scissor Cutting Marks (✂) in Sheet Margins
-        if (showScissorMarks) {
-            val scissorSize = maxOf(22f, grid.sheetWidthPx * 0.016f)
+        // 5. Scissor Icons (✂) along Interior Cut Line Endpoints
+        if (showScissorMarks && grid.cutLines.isNotEmpty()) {
+            val scissorSize = maxOf(20f, grid.sheetWidthPx * 0.014f)
             val scissorPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                color = Color.argb(220, 60, 60, 60) // Studio Dark Charcoal
+                color = Color.argb(230, 40, 40, 40)
                 textSize = scissorSize
                 typeface = Typeface.DEFAULT_BOLD
                 textAlign = Paint.Align.CENTER
             }
 
-            // Top & bottom margin scissors along column boundary lines
-            val topScissorY = if (grid.marginYPx > scissorSize) grid.marginYPx * 0.55f else (scissorSize * 0.85f)
-            val bottomScissorY = if (grid.marginYPx > scissorSize) {
-                grid.sheetHeightPx - (grid.marginYPx * 0.35f)
-            } else {
-                grid.sheetHeightPx - 6f
-            }
-
-            for (col in 0 until grid.cols) {
-                val cellLeft = grid.marginXPx + (col * (grid.photoWidthPx + grid.spacingXPx))
-                val cellRight = cellLeft + grid.photoWidthPx
-
-                canvas.drawText("✂", cellLeft, topScissorY, scissorPaint)
-                canvas.drawText("✂", cellLeft, bottomScissorY, scissorPaint)
-
-                canvas.drawText("✂", cellRight, topScissorY, scissorPaint)
-                canvas.drawText("✂", cellRight, bottomScissorY, scissorPaint)
-            }
-
-            // Left & right margin scissors along row boundary lines
-            val leftScissorX = if (grid.marginXPx > scissorSize) grid.marginXPx * 0.5f else (scissorSize * 0.6f)
-            val rightScissorX = if (grid.marginXPx > scissorSize) {
-                grid.sheetWidthPx - (grid.marginXPx * 0.5f)
-            } else {
-                grid.sheetWidthPx - (scissorSize * 0.6f)
-            }
-
-            val textOffset = scissorSize * 0.35f
-            for (row in 0 until grid.rows) {
-                val cellTop = grid.marginYPx + (row * (grid.photoHeightPx + grid.spacingYPx))
-                val cellBottom = cellTop + grid.photoHeightPx
-
-                canvas.drawText("✂", leftScissorX, cellTop + textOffset, scissorPaint)
-                canvas.drawText("✂", leftScissorX, cellBottom + textOffset, scissorPaint)
-                canvas.drawText("✂", rightScissorX, cellTop + textOffset, scissorPaint)
-                canvas.drawText("✂", rightScissorX, cellBottom + textOffset, scissorPaint)
+            for (line in grid.cutLines) {
+                if (line.startX == line.endX) {
+                    // Vertical line: mark scissors at top and bottom ends
+                    canvas.drawText("✂", line.startX, scissorSize * 1.1f, scissorPaint)
+                    canvas.drawText("✂", line.startX, grid.sheetHeightPx - (scissorSize * 0.3f), scissorPaint)
+                } else if (line.startY == line.endY) {
+                    // Horizontal line: mark scissors at left and right ends
+                    canvas.drawText("✂", scissorSize * 0.8f, line.startY + (scissorSize * 0.35f), scissorPaint)
+                    canvas.drawText("✂", grid.sheetWidthPx - (scissorSize * 0.8f), line.startY + (scissorSize * 0.35f), scissorPaint)
+                }
             }
         }
 

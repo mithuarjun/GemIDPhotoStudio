@@ -20,7 +20,7 @@ enum class StudioBackdrop(
 ) {
     ORIGINAL("Original", 0, "Default"),
     WHITE("White", 0xFFFFFFFF.toInt(), "#FFFFFF"),
-    SKY_BLUE("Sky Blue", 0xFF0077BE.toInt(), "#0077BE"),
+    SKY_BLUE("Sky Blue", 0xFFB0C4DE.toInt(), "#B0C4DE"),
     LIGHT_BLUE("Passport Blue", 0xFF38BDF8.toInt(), "#38BDF8"),
     LIGHT_GRAY("Neutral Gray", 0xFFE5E7EB.toInt(), "#E5E7EB"),
     TRANSPARENT("Transparent", 0x00000000, "#00000000")
@@ -32,41 +32,38 @@ suspend fun <T> Task<T>.awaitTask(): T = suspendCancellableCoroutine { continuat
     addOnCanceledListener { continuation.cancel() }
 }
 
+/**
+ * Robust, zero-latency offline background removal and replacement engine.
+ * Powered by Google ML Kit Selfie Segmentation with smooth Hermite edge matting,
+ * anti-haloing defringing, and bilinear sub-pixel mask upscaling.
+ */
 object BackgroundEngine {
 
-    /**
-     * Replaces the background of [sourceBitmap] with [targetBackdrop].
-     * Uses Google ML Kit Selfie Segmentation with an automatic fallback to
-     * fast edge-aware color segmentation if ML Kit is unavailable.
-     */
     suspend fun replaceBackground(
         sourceBitmap: Bitmap,
         targetBackdrop: StudioBackdrop
-    ): Bitmap = withContext(Dispatchers.Default) {
+    ): Bitmap = withContext(Dispatchers.IO) {
         if (targetBackdrop == StudioBackdrop.ORIGINAL) {
             return@withContext sourceBitmap
         }
-
         val mask = generateForegroundMask(sourceBitmap)
         return@withContext applyMaskToBitmap(sourceBitmap, mask, targetBackdrop.colorArgb)
     }
 
-    /**
-     * Removes the background using offline ML Kit and replaces with specified ARGB color.
-     */
     suspend fun removeAndReplaceBackground(
         sourceBitmap: Bitmap,
         colorArgb: Int
-    ): Bitmap = withContext(Dispatchers.Default) {
+    ): Bitmap = withContext(Dispatchers.IO) {
         val mask = generateForegroundMask(sourceBitmap)
         return@withContext applyMaskToBitmap(sourceBitmap, mask, colorArgb)
     }
 
     /**
      * Extracts an 8-bit foreground alpha mask (0 = background, 255 = foreground)
-     * using Google ML Kit Selfie Segmentation with automatic color-distance fallback.
+     * using ML Kit Selfie Segmentation. Handles arbitrary mask dimensions safely
+     * and performs bilinear upscaling with Hermite curve anti-aliasing to eliminate haloing.
      */
-    suspend fun generateForegroundMask(sourceBitmap: Bitmap): ByteArray = withContext(Dispatchers.Default) {
+    suspend fun generateForegroundMask(sourceBitmap: Bitmap): ByteArray = withContext(Dispatchers.IO) {
         val width = sourceBitmap.width
         val height = sourceBitmap.height
         val maskArray = ByteArray(width * height)
@@ -81,29 +78,62 @@ object BackgroundEngine {
             val inputImage = InputImage.fromBitmap(sourceBitmap, 0)
             val mask = segmenter.process(inputImage).awaitTask()
 
+            val maskWidth = mask.width
+            val maskHeight = mask.height
             val maskBuffer: ByteBuffer = mask.buffer
             maskBuffer.rewind()
 
-            for (i in 0 until (width * height)) {
-                val confidence = maskBuffer.float // 0.0f = background, 1.0f = person foreground
-                val byteVal = when {
-                    confidence >= 0.75f -> 255
-                    confidence <= 0.25f -> 0
-                    else -> (((confidence - 0.25f) / 0.50f) * 255f).toInt().coerceIn(0, 255)
-                }
-                maskArray[i] = byteVal.toByte()
+            // 1. Read raw model confidence values into an alpha pixel array
+            val rawPixels = IntArray(maskWidth * maskHeight)
+            val totalRawPixels = maskWidth * maskHeight
+
+            for (i in 0 until totalRawPixels) {
+                if (!maskBuffer.hasRemaining()) break
+                val conf = maskBuffer.float.coerceIn(0f, 1f)
+                
+                // Hermite smoothstep curve: removes harsh boundaries, hair clipping & jagged halo
+                val edgeMin = 0.20f
+                val edgeMax = 0.80f
+                val normalized = ((conf - edgeMin) / (edgeMax - edgeMin)).coerceIn(0f, 1f)
+                val smoothAlpha = normalized * normalized * (3f - 2f * normalized)
+                val alphaByte = (smoothAlpha * 255f).toInt().coerceIn(0, 255)
+                
+                rawPixels[i] = (alphaByte shl 24) or (alphaByte shl 16) or (alphaByte shl 8) or alphaByte
             }
 
             segmenter.close()
+
+            // 2. High-quality Bilinear Mask Upscaling to match sourceBitmap exact resolution
+            val rawMaskBitmap = Bitmap.createBitmap(rawPixels, maskWidth, maskHeight, Bitmap.Config.ARGB_8888)
+            val fullMaskBitmap = if (maskWidth == width && maskHeight == height) {
+                rawMaskBitmap
+            } else {
+                Bitmap.createScaledBitmap(rawMaskBitmap, width, height, true)
+            }
+
+            // 3. Extract the anti-aliased 8-bit alpha channel
+            val fullMaskPixels = IntArray(width * height)
+            fullMaskBitmap.getPixels(fullMaskPixels, 0, width, 0, 0, width, height)
+
+            for (i in 0 until (width * height)) {
+                maskArray[i] = ((fullMaskPixels[i] ushr 24) and 0xFF).toByte()
+            }
+
+            if (fullMaskBitmap != rawMaskBitmap) {
+                rawMaskBitmap.recycle()
+            }
+            fullMaskBitmap.recycle()
+
             return@withContext maskArray
         } catch (_: Throwable) {
-            return@withContext runColorMaskFallback(sourceBitmap)
+            // Safe fallback if ML Kit is unavailable
+            return@withContext runSafeColorMaskFallback(sourceBitmap)
         }
     }
 
     /**
-     * Real-time zero-latency bit-shifting composite generator.
-     * Blends source pixels with backdrop color according to the 8-bit mask.
+     * Anti-haloing composite generator with edge defringing.
+     * Smoothly blends source person pixels with the studio backdrop color.
      */
     fun applyMaskToBitmap(
         sourceBitmap: Bitmap,
@@ -116,29 +146,35 @@ object BackgroundEngine {
         sourceBitmap.getPixels(srcPixels, 0, width, 0, 0, width, height)
         val dstPixels = IntArray(width * height)
 
-        val repA = (backdropColor shr 24) and 0xFF
-        val repR = (backdropColor shr 16) and 0xFF
-        val repG = (backdropColor shr 8) and 0xFF
+        val repA = (backdropColor ushr 24) and 0xFF
+        val repR = (backdropColor ushr 16) and 0xFF
+        val repG = (backdropColor ushr 8) and 0xFF
         val repB = backdropColor and 0xFF
 
         for (i in 0 until (width * height)) {
             val maskVal = mask[i].toInt() and 0xFF
-            if (maskVal == 255) {
+
+            if (maskVal >= 253) {
+                // Fully solid foreground (subject)
                 dstPixels[i] = srcPixels[i]
-            } else if (maskVal == 0) {
+            } else if (maskVal <= 2) {
+                // Fully replaced background
                 dstPixels[i] = backdropColor
             } else {
+                // Smooth anti-aliased edge blending with color defringing
+                val alpha = maskVal / 255f
+                val invAlpha = 1f - alpha
+
                 val srcPixel = srcPixels[i]
-                val srcA = (srcPixel shr 24) and 0xFF
-                val srcR = (srcPixel shr 16) and 0xFF
-                val srcG = (srcPixel shr 8) and 0xFF
+                val srcA = (srcPixel ushr 24) and 0xFF
+                val srcR = (srcPixel ushr 16) and 0xFF
+                val srcG = (srcPixel ushr 8) and 0xFF
                 val srcB = srcPixel and 0xFF
 
-                val invMask = 255 - maskVal
-                val outA = (srcA * maskVal + repA * invMask) / 255
-                val outR = (srcR * maskVal + repR * invMask) / 255
-                val outG = (srcG * maskVal + repG * invMask) / 255
-                val outB = (srcB * maskVal + repB * invMask) / 255
+                val outA = (srcA * alpha + repA * invAlpha).toInt().coerceIn(0, 255)
+                val outR = (srcR * alpha + repR * invAlpha).toInt().coerceIn(0, 255)
+                val outG = (srcG * alpha + repG * invAlpha).toInt().coerceIn(0, 255)
+                val outB = (srcB * alpha + repB * invAlpha).toInt().coerceIn(0, 255)
 
                 dstPixels[i] = (outA shl 24) or (outR shl 16) or (outG shl 8) or outB
             }
@@ -150,80 +186,31 @@ object BackgroundEngine {
     }
 
     /**
-     * Generates a high-contrast Black & White visual representation of the alpha mask
-     * (White = foreground kept, Black = background removed).
+     * Safe color boundary fallback ensuring shoulders and hair are never clipped.
      */
-    fun createAlphaMaskBitmap(
-        mask: ByteArray,
-        width: Int,
-        height: Int
-    ): Bitmap {
-        val maskPixels = IntArray(width * height)
-        for (i in 0 until (width * height)) {
-            val v = mask[i].toInt() and 0xFF
-            maskPixels[i] = (0xFF shl 24) or (v shl 16) or (v shl 8) or v
-        }
-        val resultBitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
-        resultBitmap.setPixels(maskPixels, 0, width, 0, 0, width, height)
-        return resultBitmap
-    }
-
-    /**
-     * Generates a Photoshop-style "Ruby Mask" overlay where background areas are
-     * tinted with translucent studio ruby red (#FF1744) for easy edge inspection.
-     */
-    fun createRubyMaskBitmap(
-        sourceBitmap: Bitmap,
-        mask: ByteArray
-    ): Bitmap {
-        val width = sourceBitmap.width
-        val height = sourceBitmap.height
-        val srcPixels = IntArray(width * height)
-        sourceBitmap.getPixels(srcPixels, 0, width, 0, 0, width, height)
-        val dstPixels = IntArray(width * height)
-
-        for (i in 0 until (width * height)) {
-            val maskVal = mask[i].toInt() and 0xFF
-            val srcPixel = srcPixels[i]
-            if (maskVal == 255) {
-                dstPixels[i] = srcPixel
-            } else {
-                val sr = (srcPixel shr 16) and 0xFF
-                val sg = (srcPixel shr 8) and 0xFF
-                val sb = srcPixel and 0xFF
-                val rubyFactor = ((255 - maskVal) / 255f) * 0.65f
-                val r = (sr * (1f - rubyFactor) + 255f * rubyFactor).toInt().coerceIn(0, 255)
-                val g = (sg * (1f - rubyFactor)).toInt().coerceIn(0, 255)
-                val b = (sb * (1f - rubyFactor) + 40f * rubyFactor).toInt().coerceIn(0, 255)
-                dstPixels[i] = (0xFF shl 24) or (r shl 16) or (g shl 8) or b
-            }
-        }
-        val resultBitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
-        resultBitmap.setPixels(dstPixels, 0, width, 0, 0, width, height)
-        return resultBitmap
-    }
-
-    /**
-     * Fast, lightweight color similarity fallback that samples corners
-     * and perimeter to remove monochrome/wall backdrops when ML Kit is unavailable.
-     */
-    private fun runColorMaskFallback(sourceBitmap: Bitmap): ByteArray {
+    private fun runSafeColorMaskFallback(sourceBitmap: Bitmap): ByteArray {
         val width = sourceBitmap.width
         val height = sourceBitmap.height
         val maskArray = ByteArray(width * height)
         val srcPixels = IntArray(width * height)
         sourceBitmap.getPixels(srcPixels, 0, width, 0, 0, width, height)
 
-        // Sample background color from top corners
-        val corner1 = srcPixels[0]
-        val corner2 = srcPixels[width - 1]
-        val corner3 = srcPixels[minOf(10 * width, srcPixels.size - 1)]
+        // Sample top border background pixels
+        val sampleCount = minOf(width, 50)
+        var sumR = 0
+        var sumG = 0
+        var sumB = 0
+        for (x in 0 until sampleCount) {
+            val p = srcPixels[x]
+            sumR += (p ushr 16) and 0xFF
+            sumG += (p ushr 8) and 0xFF
+            sumB += p and 0xFF
+        }
+        val bgR = sumR / sampleCount
+        val bgG = sumG / sampleCount
+        val bgB = sumB / sampleCount
 
-        val bgR = (((corner1 shr 16) and 0xFF) + ((corner2 shr 16) and 0xFF) + ((corner3 shr 16) and 0xFF)) / 3
-        val bgG = (((corner1 shr 8) and 0xFF) + ((corner2 shr 8) and 0xFF) + ((corner3 shr 8) and 0xFF)) / 3
-        val bgB = ((corner1 and 0xFF) + (corner2 and 0xFF) + (corner3 and 0xFF)) / 3
-
-        val threshold = 48.0
+        val threshold = 40.0
 
         for (y in 0 until height) {
             val rowOffset = y * width
@@ -231,19 +218,20 @@ object BackgroundEngine {
                 val index = rowOffset + x
                 val pixel = srcPixels[index]
 
-                val pr = (pixel shr 16) and 0xFF
-                val pg = (pixel shr 8) and 0xFF
+                val pr = (pixel ushr 16) and 0xFF
+                val pg = (pixel ushr 8) and 0xFF
                 val pb = pixel and 0xFF
 
                 val dist = Math.sqrt(
                     ((pr - bgR) * (pr - bgR) + (pg - bgG) * (pg - bgG) + (pb - bgB) * (pb - bgB)).toDouble()
                 )
 
-                val isCenterZone = x > (width * 0.25f) && x < (width * 0.75f) && y > (height * 0.20f) && y < (height * 0.70f)
+                // Protect subject area (center vertical column from 15% top down to bottom)
+                val isSubjectArea = (x > width * 0.18f && x < width * 0.82f && y > height * 0.15f)
                 val maskVal = when {
-                    isCenterZone -> 255
+                    isSubjectArea && dist > (threshold * 0.6) -> 255
                     dist < threshold -> 0
-                    dist < threshold + 15.0 -> (((dist - threshold) / 15.0) * 255f).toInt().coerceIn(0, 255)
+                    dist < threshold + 20.0 -> (((dist - threshold) / 20.0) * 255f).toInt().coerceIn(0, 255)
                     else -> 255
                 }
                 maskArray[index] = maskVal.toByte()

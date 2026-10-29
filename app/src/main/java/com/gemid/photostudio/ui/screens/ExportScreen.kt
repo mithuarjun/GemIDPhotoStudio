@@ -1,6 +1,5 @@
 package com.gemid.photostudio.ui.screens
 
-import android.content.Intent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -24,24 +23,18 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.ArrowBack
-import androidx.compose.material.icons.rounded.CheckCircle
+import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.Home
 import androidx.compose.material.icons.rounded.Image
 import androidx.compose.material.icons.rounded.PictureAsPdf
 import androidx.compose.material.icons.rounded.Print
 import androidx.compose.material.icons.rounded.SaveAlt
-import androidx.compose.material.icons.rounded.Share
-import androidx.compose.material.icons.rounded.Wifi
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -58,7 +51,6 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -69,7 +61,6 @@ import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
 import com.gemid.photostudio.navigation.Screen
 import com.gemid.photostudio.ui.theme.AccentCyan
-import com.gemid.photostudio.ui.theme.AccentTeal
 import com.gemid.photostudio.ui.theme.Navy10
 import com.gemid.photostudio.ui.theme.Navy15
 import com.gemid.photostudio.ui.theme.Navy20
@@ -78,12 +69,12 @@ import com.gemid.photostudio.ui.viewmodel.StudioViewModel
 import kotlinx.coroutines.launch
 
 /**
- * Direct Export & Wi-Fi Print Screen:
- * Large, clear, high-contrast buttons for:
- * 1. Direct Wi-Fi Printer connection (WifiPrintHelper / PrintManager)
- * 2. High-Res 300 DPI JPEG export (with EXIF resolution injection)
- * 3. PDF export (1:1 physical scale)
- * 4. Lossless PNG export
+ * Professional Canva-Grade Export & Wi-Fi Printing Screen:
+ * - Direct Wi-Fi Printer connection via Android PrintManager.
+ * - Save 300 DPI JPEG with injected EXIF resolution tags (Pictures/GemIDPhotoStudio).
+ * - Export 1:1 Physical Scale PDF (Documents/GemIDPhotoStudio).
+ * - Save Lossless PNG.
+ * - Live MediaStore feedback notifications.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -110,13 +101,13 @@ fun ExportScreen(
             TopAppBar(
                 title = {
                     Column {
-                        Text("Export & Print", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 18.sp)
+                        Text("Export & Print Studio", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 18.sp)
                         Text("${selectedPaper.title} • $selectedCount Photos (300 DPI)", color = AccentCyan, fontSize = 11.sp)
                     }
                 },
                 navigationIcon = {
                     IconButton(onClick = { navController.popBackStack() }) {
-                        Icon(Icons.Rounded.ArrowBack, contentDescription = "Back", tint = Color.White)
+                        Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Back", tint = Color.White)
                     }
                 },
                 actions = {
@@ -142,7 +133,7 @@ fun ExportScreen(
             Column(
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(horizontal = 16.dp, vertical = 8.dp)
+                    .padding(horizontal = 16.dp, vertical = 6.dp)
                     .verticalScroll(rememberScrollState()),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
@@ -150,8 +141,8 @@ fun ExportScreen(
                 Card(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(200.dp),
-                    shape = RoundedCornerShape(16.dp),
+                        .height(210.dp),
+                    shape = RoundedCornerShape(18.dp),
                     colors = CardDefaults.cardColors(containerColor = Navy20),
                     border = androidx.compose.foundation.BorderStroke(1.dp, Navy25)
                 ) {
@@ -181,7 +172,7 @@ fun ExportScreen(
                     }
                 }
 
-                Spacer(modifier = Modifier.height(20.dp))
+                Spacer(modifier = Modifier.height(18.dp))
 
                 Text(
                     text = "Select Export or Print Action",
@@ -191,13 +182,13 @@ fun ExportScreen(
                     modifier = Modifier.align(Alignment.Start)
                 )
 
-                Spacer(modifier = Modifier.height(14.dp))
+                Spacer(modifier = Modifier.height(12.dp))
 
                 // ── 1. Direct Wi-Fi Printer Connection ────────────────────
-                ExportActionCard(
+                CanvaExportCard(
                     title = "Direct Wi-Fi Print",
-                    subtitle = "Send to Canon SELPHY, Epson, HP or Mopria printer",
-                    badgeText = "RECOMMENDED FOR SHOPS",
+                    subtitle = "Send directly to Canon SELPHY, Epson, HP or Mopria printer",
+                    badgeText = "MINILAB WIRELESS",
                     icon = Icons.Rounded.Print,
                     accentColor = AccentCyan,
                     onClick = {
@@ -213,16 +204,17 @@ fun ExportScreen(
                 Spacer(modifier = Modifier.height(12.dp))
 
                 // ── 2. High-Res 300 DPI JPEG Export ───────────────────────
-                ExportActionCard(
+                CanvaExportCard(
                     title = "Save 300 DPI JPEG",
-                    subtitle = "High-resolution photo print format with injected EXIF",
+                    subtitle = "High-resolution photo print format with injected EXIF 300 DPI",
                     badgeText = "LAB QUALITY",
                     icon = Icons.Rounded.Image,
-                    accentColor = Color(0xFF48CAE4),
+                    accentColor = Color(0xFF38BDF8),
                     onClick = {
-                        viewModel.exportJpeg(context) { fileName ->
+                        viewModel.exportJpeg(context) { msg ->
+                            android.widget.Toast.makeText(context, msg, android.widget.Toast.LENGTH_LONG).show()
                             scope.launch {
-                                snackbarHostState.showSnackbar("Saved JPEG: $fileName")
+                                snackbarHostState.showSnackbar(msg)
                             }
                         }
                     }
@@ -231,16 +223,17 @@ fun ExportScreen(
                 Spacer(modifier = Modifier.height(12.dp))
 
                 // ── 3. 1:1 Scale PDF Document Export ──────────────────────
-                ExportActionCard(
+                CanvaExportCard(
                     title = "Export 1:1 Scale PDF",
-                    subtitle = "Exact physical millimeter dimensions for document minilabs",
+                    subtitle = "Exact physical millimeter dimensions for minilab document printers",
                     badgeText = "CALIBRATED SCALE",
                     icon = Icons.Rounded.PictureAsPdf,
                     accentColor = Color(0xFFFF70A6),
                     onClick = {
-                        viewModel.exportPdf(context) { fileName ->
+                        viewModel.exportPdf(context) { msg ->
+                            android.widget.Toast.makeText(context, msg, android.widget.Toast.LENGTH_LONG).show()
                             scope.launch {
-                                snackbarHostState.showSnackbar("Saved PDF: $fileName")
+                                snackbarHostState.showSnackbar(msg)
                             }
                         }
                     }
@@ -249,16 +242,17 @@ fun ExportScreen(
                 Spacer(modifier = Modifier.height(12.dp))
 
                 // ── 4. Lossless PNG Export ────────────────────────────────
-                ExportActionCard(
+                CanvaExportCard(
                     title = "Save Lossless PNG",
                     subtitle = "Uncompressed digital archival graphics format",
                     badgeText = "LOSSLESS",
                     icon = Icons.Rounded.SaveAlt,
                     accentColor = Color(0xFF70D6FF),
                     onClick = {
-                        viewModel.exportPng(context) { fileName ->
+                        viewModel.exportPng(context) { msg ->
+                            android.widget.Toast.makeText(context, msg, android.widget.Toast.LENGTH_LONG).show()
                             scope.launch {
-                                snackbarHostState.showSnackbar("Saved PNG: $fileName")
+                                snackbarHostState.showSnackbar(msg)
                             }
                         }
                     }
@@ -267,7 +261,7 @@ fun ExportScreen(
                 Spacer(modifier = Modifier.height(24.dp))
             }
 
-            // Loading overlay
+            // Immediate Loading Overlay
             AnimatedVisibility(
                 visible = viewModel.isLoading,
                 enter = fadeIn(),
@@ -276,25 +270,32 @@ fun ExportScreen(
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
-                        .background(Color.Black.copy(alpha = 0.7f)),
+                        .background(Color.Black.copy(alpha = 0.75f)),
                     contentAlignment = Alignment.Center
                 ) {
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.Center
+                    Surface(
+                        shape = RoundedCornerShape(16.dp),
+                        color = Navy15,
+                        border = androidx.compose.foundation.BorderStroke(1.dp, AccentCyan.copy(alpha = 0.5f))
                     ) {
-                        CircularProgressIndicator(
-                            color = AccentCyan,
-                            strokeWidth = 3.dp,
-                            modifier = Modifier.size(48.dp)
-                        )
-                        Spacer(modifier = Modifier.height(16.dp))
-                        Text(
-                            text = viewModel.loadingMessage,
-                            color = Color.White,
-                            fontSize = 14.sp,
-                            fontWeight = FontWeight.Medium
-                        )
+                        Column(
+                            modifier = Modifier.padding(28.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.Center
+                        ) {
+                            CircularProgressIndicator(
+                                color = AccentCyan,
+                                strokeWidth = 3.dp,
+                                modifier = Modifier.size(48.dp)
+                            )
+                            Spacer(modifier = Modifier.height(16.dp))
+                            Text(
+                                text = viewModel.loadingMessage,
+                                color = Color.White,
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                        }
                     }
                 }
             }
@@ -303,7 +304,7 @@ fun ExportScreen(
 }
 
 @Composable
-private fun ExportActionCard(
+private fun CanvaExportCard(
     title: String,
     subtitle: String,
     badgeText: String,
@@ -314,12 +315,12 @@ private fun ExportActionCard(
     Surface(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(16.dp))
+            .clip(RoundedCornerShape(18.dp))
             .clickable(onClick = onClick)
             .border(
                 width = 1.dp,
-                color = accentColor.copy(alpha = 0.4f),
-                shape = RoundedCornerShape(16.dp)
+                color = accentColor.copy(alpha = 0.45f),
+                shape = RoundedCornerShape(18.dp)
             ),
         color = Navy15,
         tonalElevation = 4.dp
@@ -332,7 +333,7 @@ private fun ExportActionCard(
         ) {
             Box(
                 modifier = Modifier
-                    .size(52.dp)
+                    .size(54.dp)
                     .background(
                         color = accentColor.copy(alpha = 0.15f),
                         shape = CircleShape
@@ -379,7 +380,7 @@ private fun ExportActionCard(
 
                 Text(
                     text = subtitle,
-                    color = Color.LightGray,
+                    color = Color(0xFFCBD5E1),
                     fontSize = 12.sp,
                     lineHeight = 16.sp
                 )
