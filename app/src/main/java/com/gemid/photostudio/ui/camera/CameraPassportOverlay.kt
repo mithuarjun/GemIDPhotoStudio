@@ -44,13 +44,14 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.gemid.photostudio.data.model.PassportTemplate
+import com.gemid.photostudio.data.model.PhotoSpec
 import com.gemid.photostudio.ui.theme.AccentCyan
 import com.gemid.photostudio.ui.theme.AccentTeal
 import com.gemid.photostudio.ui.theme.Navy10
 
 @Composable
 fun CameraPassportOverlay(
-    template: PassportTemplate,
+    template: PhotoSpec,
     showGrid: Boolean = true,
     modifier: Modifier = Modifier
 ) {

@@ -88,6 +88,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
 import com.gemid.photostudio.navigation.Screen
+import com.gemid.photostudio.sheet.CustomPaperSizeDialog
 import com.gemid.photostudio.sheet.GridMatrixResult
 import com.gemid.photostudio.sheet.PaperSize
 import com.gemid.photostudio.ui.theme.AccentCyan
@@ -123,6 +124,8 @@ fun SheetLayoutScreen(
             viewModel.addPhotosFromGallery(uris)
         }
     }
+
+    var showCustomPaperDialog by remember { mutableStateOf(false) }
 
     // Ensure initial master sheet is generated
     LaunchedEffect(Unit) {
@@ -351,15 +354,66 @@ fun SheetLayoutScreen(
                 }
 
                 item {
+                    val allPapers = viewModel.getAllPaperSizes()
                     LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                        items(PaperSize.entries.toTypedArray()) { paper ->
-                            val isSelected = viewModel.selectedPaperSize == paper
+                        items(allPapers) { paper ->
+                            val isSelected = viewModel.selectedPaperSize.id == paper.id
                             PaperTargetCard(
                                 paperSize = paper,
                                 isLandscape = uiState.isSheetLandscape,
                                 isSelected = isSelected,
-                                onClick = { viewModel.setPaperSizeTarget(paper) }
+                                onClick = { viewModel.setPaperSizeTarget(paper) },
+                                onDelete = if (paper.isCustom) {
+                                    { viewModel.deleteCustomPaper(paper) }
+                                } else null
                             )
+                        }
+
+                        item {
+                            Surface(
+                                shape = RoundedCornerShape(16.dp),
+                                color = Navy20,
+                                border = BorderStroke(1.dp, AccentCyan.copy(alpha = 0.5f)),
+                                modifier = Modifier
+                                    .width(138.dp)
+                                    .height(108.dp)
+                                    .clickable { showCustomPaperDialog = true }
+                            ) {
+                                Column(
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .padding(12.dp),
+                                    horizontalAlignment = Alignment.CenterHorizontally,
+                                    verticalArrangement = Arrangement.Center
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(32.dp)
+                                            .clip(CircleShape)
+                                            .background(AccentCyan.copy(alpha = 0.2f)),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Icon(
+                                            Icons.Rounded.Add,
+                                            contentDescription = "Add Custom Paper",
+                                            tint = AccentCyan,
+                                            modifier = Modifier.size(18.dp)
+                                        )
+                                    }
+                                    Spacer(modifier = Modifier.height(6.dp))
+                                    Text(
+                                        text = "+ Custom Paper",
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 11.sp,
+                                        color = AccentCyan
+                                    )
+                                    Text(
+                                        text = "Any Size / Roll",
+                                        fontSize = 9.sp,
+                                        color = Neutral80
+                                    )
+                                }
+                            }
                         }
                     }
                 }
@@ -749,6 +803,16 @@ fun SheetLayoutScreen(
             }
         }
     }
+
+    if (showCustomPaperDialog) {
+        CustomPaperSizeDialog(
+            onDismissRequest = { showCustomPaperDialog = false },
+            onConfirm = { customPaperDef ->
+                viewModel.addCustomPaperDefinition(customPaperDef)
+                showCustomPaperDialog = false
+            }
+        )
+    }
 }
 
 // ── Live Composite Sheet Preview Card ────────────────────────────────
@@ -908,7 +972,8 @@ private fun PaperTargetCard(
     paperSize: PaperSize,
     isLandscape: Boolean,
     isSelected: Boolean,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    onDelete: (() -> Unit)? = null
 ) {
     Card(
         modifier = Modifier
@@ -936,11 +1001,24 @@ private fun PaperTargetCard(
                 Text(
                     text = paperSize.dimensionInches,
                     fontWeight = FontWeight.Bold,
-                    fontSize = 14.sp,
-                    color = if (isSelected) AccentCyan else Neutral90
+                    fontSize = 13.sp,
+                    color = if (isSelected) AccentCyan else Neutral90,
+                    modifier = Modifier.weight(1f)
                 )
 
-                if (isSelected) {
+                if (onDelete != null) {
+                    IconButton(
+                        onClick = onDelete,
+                        modifier = Modifier.size(20.dp)
+                    ) {
+                        Icon(
+                            Icons.Rounded.Close,
+                            contentDescription = "Delete custom paper",
+                            tint = Color.Red.copy(alpha = 0.7f),
+                            modifier = Modifier.size(14.dp)
+                        )
+                    }
+                } else if (isSelected) {
                     Icon(
                         Icons.Rounded.Check,
                         contentDescription = null,
@@ -965,11 +1043,12 @@ private fun PaperTargetCard(
                 color = if (isSelected) Blue60 else Navy30
             ) {
                 Text(
-                    text = when (paperSize) {
-                        PaperSize.POSTCARD_4X6 -> "8 Photos (2×4)"
-                        PaperSize.SIZE_5X7 -> "12 Photos (3×4)"
-                        PaperSize.A4 -> "35 Photos (5×7)"
-                        PaperSize.LETTER -> "30 Photos (5×6)"
+                    text = when (paperSize.id) {
+                        "paper_4x6" -> "8 Photos (2×4)"
+                        "paper_5x7" -> "12 Photos (3×4)"
+                        "paper_a4" -> "35 Photos (5×7)"
+                        "paper_letter" -> "30 Photos (5×6)"
+                        else -> "${paperSize.widthMm.toInt()}×${paperSize.heightMm.toInt()} mm"
                     },
                     fontSize = 10.sp,
                     fontWeight = FontWeight.SemiBold,

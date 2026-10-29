@@ -9,6 +9,7 @@ import android.graphics.Paint
 import android.graphics.Rect
 import android.graphics.RectF
 import com.gemid.photostudio.data.model.PassportTemplate
+import com.gemid.photostudio.data.model.PhotoSpec
 import com.gemid.photostudio.editor.BackgroundEngine
 import com.gemid.photostudio.editor.StudioBackdrop
 import com.gemid.photostudio.editor.awaitTask
@@ -30,7 +31,7 @@ object AutoPassportOptimizer {
 
     suspend fun optimizePassportPhoto(
         rawBitmap: Bitmap,
-        template: PassportTemplate = PassportTemplate.INDIAN_PASSPORT,
+        template: PhotoSpec = PassportTemplate.INDIAN_PASSPORT,
         targetBackdrop: StudioBackdrop = StudioBackdrop.WHITE,
         autoCrop: Boolean = true,
         autoCleanBackground: Boolean = true,
@@ -66,7 +67,7 @@ object AutoPassportOptimizer {
      */
     private suspend fun detectFaceAndCrop(
         source: Bitmap,
-        template: PassportTemplate
+        template: PhotoSpec
     ): Bitmap = withContext(Dispatchers.Default) {
         try {
             val options = FaceDetectorOptions.Builder()
@@ -173,7 +174,7 @@ object AutoPassportOptimizer {
     /**
      * Fallback centered portrait crop when facial landmarks are not detected.
      */
-    private fun fallbackCenterCrop(source: Bitmap, template: PassportTemplate): Bitmap {
+    private fun fallbackCenterCrop(source: Bitmap, template: PhotoSpec): Bitmap {
         val targetAspect = template.aspectRatio
         val srcW = source.width.toFloat()
         val srcH = source.height.toFloat()

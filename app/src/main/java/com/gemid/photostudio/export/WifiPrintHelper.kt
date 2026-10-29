@@ -51,6 +51,13 @@ object WifiPrintHelper {
                 if (isLandscape) PrintAttributes.MediaSize.NA_LETTER.asLandscape()
                 else PrintAttributes.MediaSize.NA_LETTER.asPortrait()
             }
+            else -> {
+                val wMils = (paper.widthInches * 1000).toInt()
+                val hMils = (paper.heightInches * 1000).toInt()
+                val (w, h) = if (isLandscape) maxOf(wMils, hMils) to minOf(wMils, hMils)
+                else minOf(wMils, hMils) to maxOf(wMils, hMils)
+                PrintAttributes.MediaSize(paper.id, paper.title, w, h)
+            }
         }
 
         val printAttributes = PrintAttributes.Builder()

@@ -43,16 +43,30 @@ import com.gemid.photostudio.ui.theme.AccentCyan
 import com.gemid.photostudio.ui.theme.AccentTeal
 import com.gemid.photostudio.ui.theme.Navy10
 
-enum class CropRatioPreset(
+data class CropRatioPreset(
     val title: String,
     val ratio: Float,
-    val dimensionsLabel: String
+    val dimensionsLabel: String,
+    val isCustom: Boolean = false
 ) {
-    INDIAN_PASSPORT("Indian Passport", 35f / 45f, "35×45 mm"),
-    UPSC_SQUARE("UPSC / SSC Square", 1.0f, "35×35 mm"),
-    US_VISA("US Visa / Passport", 1.0f, "2×2 inches"),
-    SQUARE_1_1("1:1 Square", 1.0f, "Square"),
-    STAMP_PHOTO("Stamp Photo", 20f / 25f, "20×25 mm")
+    companion object {
+        val INDIAN_PASSPORT = CropRatioPreset("Indian Passport", 35f / 45f, "35×45 mm")
+        val UPSC_SQUARE = CropRatioPreset("UPSC / SSC Square", 1.0f, "35×35 mm")
+        val US_VISA = CropRatioPreset("US Visa / Passport", 1.0f, "2×2 inches")
+        val SQUARE_1_1 = CropRatioPreset("1:1 Square", 1.0f, "Square")
+        val STAMP_PHOTO = CropRatioPreset("Stamp Photo", 20f / 25f, "20×25 mm")
+
+        val entries: List<CropRatioPreset> = listOf(INDIAN_PASSPORT, UPSC_SQUARE, US_VISA, SQUARE_1_1, STAMP_PHOTO)
+
+        fun fromPhotoSpec(spec: com.gemid.photostudio.data.model.PhotoSpec): CropRatioPreset {
+            return CropRatioPreset(
+                title = spec.title,
+                ratio = spec.aspectRatio,
+                dimensionsLabel = spec.dimensionMmLabel,
+                isCustom = spec.isCustom
+            )
+        }
+    }
 }
 
 @Composable

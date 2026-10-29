@@ -33,6 +33,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.AddAPhoto
 import androidx.compose.material.icons.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.AutoFixHigh
@@ -102,6 +103,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
 import coil.compose.AsyncImage
+import com.gemid.photostudio.data.model.CustomPhotoSpecDialog
+import com.gemid.photostudio.data.model.PhotoSpec
 import com.gemid.photostudio.editor.CropCalculator
 import com.gemid.photostudio.editor.CropRatioPreset
 import com.gemid.photostudio.editor.ExamStampConfig
@@ -138,6 +141,7 @@ fun StudioEditorScreen(
     var currentCropOffset by remember { mutableStateOf(Offset.Zero) }
     var currentCropRect by remember { mutableStateOf(Rect.Zero) }
     var currentCanvasSize by remember { mutableStateOf(Size.Zero) }
+    var showCustomPhotoSpecDialog by remember { mutableStateOf(false) }
 
     val galleryLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.PickVisualMedia()
@@ -488,7 +492,10 @@ fun StudioEditorScreen(
                             CropperControlsPanel(
                                 activeBitmap = activeBitmap,
                                 selectedPreset = uiState.cropPreset,
+                                customSpecs = viewModel.getAllPhotoSpecs(),
                                 onSelectPreset = { viewModel.setCropPreset(it) },
+                                onOpenCustomSpecDialog = { showCustomPhotoSpecDialog = true },
+                                onDeleteCustomSpec = { viewModel.deleteCustomPhotoSpec(it) },
                                 onApplyCrop = {
                                     if (activeBitmap != null && currentCanvasSize.width > 0f) {
                                         val cropped = CropCalculator.performCrop(
@@ -629,6 +636,16 @@ fun StudioEditorScreen(
                 }
             }
         }
+
+        if (showCustomPhotoSpecDialog) {
+            CustomPhotoSpecDialog(
+                onDismissRequest = { showCustomPhotoSpecDialog = false },
+                onConfirm = { newSpec ->
+                    viewModel.addCustomPhotoSpec(newSpec)
+                    showCustomPhotoSpecDialog = false
+                }
+            )
+        }
     }
 }
 
@@ -638,7 +655,10 @@ fun StudioEditorScreen(
 private fun CropperControlsPanel(
     activeBitmap: Bitmap?,
     selectedPreset: CropRatioPreset,
+    customSpecs: List<PhotoSpec>,
     onSelectPreset: (CropRatioPreset) -> Unit,
+    onOpenCustomSpecDialog: () -> Unit,
+    onDeleteCustomSpec: (PhotoSpec) -> Unit,
     onApplyCrop: () -> Unit
 ) {
     Column {
@@ -671,10 +691,11 @@ private fun CropperControlsPanel(
 
         LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             items(CropRatioPreset.entries.toTypedArray()) { preset ->
-                val isSelected = selectedPreset == preset
+                val isSelected = selectedPreset.title == preset.title
                 Surface(
                     shape = RoundedCornerShape(10.dp),
                     color = if (isSelected) Blue60 else Navy25,
+                    border = BorderStroke(1.dp, if (isSelected) AccentCyan else Color.White.copy(alpha = 0.15f)),
                     modifier = Modifier.clickable { onSelectPreset(preset) }
                 ) {
                     Text(
@@ -684,6 +705,68 @@ private fun CropperControlsPanel(
                         color = if (isSelected) Color.White else Neutral80,
                         modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
                     )
+                }
+            }
+
+            // Custom photo specs created by user
+            items(customSpecs.filter { it.isCustom }) { spec ->
+                val specPreset = CropRatioPreset.fromPhotoSpec(spec)
+                val isSelected = selectedPreset.title == specPreset.title
+                Surface(
+                    shape = RoundedCornerShape(10.dp),
+                    color = if (isSelected) Blue60 else Navy25,
+                    border = BorderStroke(1.dp, if (isSelected) AccentCyan else Color.White.copy(alpha = 0.15f)),
+                    modifier = Modifier.clickable { onSelectPreset(specPreset) }
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "${spec.title} (${spec.dimensionMmLabel})",
+                            fontSize = 11.sp,
+                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                            color = if (isSelected) Color.White else Neutral80
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Icon(
+                            Icons.Rounded.Delete,
+                            contentDescription = "Delete custom template",
+                            tint = Color.Red.copy(alpha = 0.8f),
+                            modifier = Modifier
+                                .size(14.dp)
+                                .clickable { onDeleteCustomSpec(spec) }
+                        )
+                    }
+                }
+            }
+
+            // "+ Custom Size" button
+            item {
+                Surface(
+                    shape = RoundedCornerShape(10.dp),
+                    color = Navy15,
+                    border = BorderStroke(1.dp, AccentCyan.copy(alpha = 0.5f)),
+                    modifier = Modifier.clickable(onClick = onOpenCustomSpecDialog)
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            Icons.Rounded.Add,
+                            contentDescription = null,
+                            tint = AccentCyan,
+                            modifier = Modifier.size(14.dp)
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            text = "+ Custom Size",
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = AccentCyan
+                        )
+                    }
                 }
             }
         }

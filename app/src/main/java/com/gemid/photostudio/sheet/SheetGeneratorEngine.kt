@@ -27,7 +27,7 @@ object SheetGeneratorEngine {
         options: SheetRenderOptions = SheetRenderOptions()
     ): Bitmap = withContext(Dispatchers.Default) {
         val allPhotos = if (batchPhotos.isNotEmpty()) batchPhotos else listOf(primaryPhoto)
-        val paper = PaperSize.entries.find { it.definition == grid.paper } ?: PaperSize.POSTCARD_4X6
+        val paper = PaperSize.entries.find { it.definition == grid.paper } ?: PaperSize.fromDefinition(grid.paper)
 
         return@withContext ImageProcessor.createMixedPrintSheet(
             photos = allPhotos,

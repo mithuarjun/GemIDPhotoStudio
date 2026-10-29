@@ -330,12 +330,12 @@ fun BatchStudioScreen(
                         Text(text = "Passport Specification", fontSize = 12.sp, color = Neutral80)
                         Spacer(modifier = Modifier.height(6.dp))
                         LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            items(PassportTemplate.entries.toTypedArray()) { template ->
-                                val isSelected = config.template == template
+                            items(viewModel.getAllPhotoSpecs()) { template ->
+                                val isSelected = config.template.id == template.id
                                 FilterChip(
                                     selected = isSelected,
                                     onClick = { viewModel.updateBatchConfig(config.copy(template = template)) },
-                                    label = { Text(template.title, fontSize = 11.sp) },
+                                    label = { Text(if (template.isCustom) "${template.title} ★" else template.title, fontSize = 11.sp) },
                                     colors = FilterChipDefaults.filterChipColors(
                                         selectedContainerColor = Blue60,
                                         selectedLabelColor = Color.White
@@ -366,16 +366,16 @@ fun BatchStudioScreen(
 
                         Spacer(modifier = Modifier.height(12.dp))
 
-                        // Target Paper Size (4x6, 5x7, A4)
+                        // Target Paper Size (4x6, 5x7, A4, Custom)
                         Text(text = "Print Paper Sheet Format", fontSize = 12.sp, color = Neutral80)
                         Spacer(modifier = Modifier.height(6.dp))
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            PaperSize.entries.forEach { paper ->
-                                val isSelected = config.paperSize == paper
+                        LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            items(viewModel.getAllPaperSizes()) { paper ->
+                                val isSelected = config.paperSize.id == paper.id
                                 FilterChip(
                                     selected = isSelected,
                                     onClick = { viewModel.updateBatchConfig(config.copy(paperSize = paper)) },
-                                    label = { Text(paper.title, fontSize = 11.sp) },
+                                    label = { Text(if (paper.isCustom) "${paper.title} ★" else paper.title, fontSize = 11.sp) },
                                     colors = FilterChipDefaults.filterChipColors(
                                         selectedContainerColor = Blue60,
                                         selectedLabelColor = Color.White

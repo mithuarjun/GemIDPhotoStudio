@@ -8,6 +8,7 @@ import android.graphics.Paint
 import android.graphics.Rect
 import android.graphics.Typeface
 import com.gemid.photostudio.data.model.PassportTemplate
+import com.gemid.photostudio.data.model.PhotoSpec
 import com.gemid.photostudio.sheet.GridMatrixCalculator
 import com.gemid.photostudio.sheet.GridMatrixResult
 import com.gemid.photostudio.sheet.PaperSize
@@ -38,7 +39,7 @@ object ImageProcessor {
     suspend fun createMixedPrintSheet(
         photos: List<Bitmap>,
         paperSize: PaperSize = PaperSize.POSTCARD_4X6,
-        template: PassportTemplate = PassportTemplate.INDIAN_PASSPORT,
+        template: PhotoSpec = PassportTemplate.INDIAN_PASSPORT,
         isLandscape: Boolean = false,
         showBorders: Boolean = true,
         borderColor: Int = Color.LTGRAY,

@@ -3,6 +3,7 @@ package com.gemid.photostudio.batch
 import android.graphics.Bitmap
 import android.net.Uri
 import com.gemid.photostudio.data.model.PassportTemplate
+import com.gemid.photostudio.data.model.PhotoSpec
 import com.gemid.photostudio.editor.StudioBackdrop
 import com.gemid.photostudio.sheet.PaperSize
 import java.util.UUID
@@ -25,7 +26,7 @@ data class BatchItem(
 )
 
 data class BatchStudioConfig(
-    val template: PassportTemplate = PassportTemplate.INDIAN_PASSPORT,
+    val template: PhotoSpec = PassportTemplate.INDIAN_PASSPORT,
     val backdrop: StudioBackdrop = StudioBackdrop.WHITE,
     val paperSize: PaperSize = PaperSize.POSTCARD_4X6,
     val autoCrop: Boolean = true,

@@ -6,7 +6,10 @@ import android.graphics.Color
 import android.net.Uri
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.gemid.photostudio.data.local.CustomPresetRepository
+import com.gemid.photostudio.data.model.CustomPhotoSpec
 import com.gemid.photostudio.data.model.PassportTemplate
+import com.gemid.photostudio.data.model.PhotoSpec
 import com.gemid.photostudio.editor.BackgroundEngine
 import com.gemid.photostudio.editor.CropRatioPreset
 import com.gemid.photostudio.editor.ExamStampConfig
@@ -50,7 +53,7 @@ data class StudioUiState(
     val photoWidth: Int = 0,
     val photoHeight: Int = 0,
     val fileSizeBytes: Long = 0,
-    val selectedTemplate: PassportTemplate = PassportTemplate.INDIAN_PASSPORT,
+    val selectedTemplate: PhotoSpec = PassportTemplate.INDIAN_PASSPORT,
     val cropPreset: CropRatioPreset = CropRatioPreset.INDIAN_PASSPORT,
     val toneAdjustments: ToneAdjustments = ToneAdjustments(),
     val currentBackdrop: StudioBackdrop = StudioBackdrop.ORIGINAL,
@@ -92,6 +95,61 @@ class StudioViewModel(application: Application) : AndroidViewModel(application) 
     var borderWidth by mutableStateOf(3f)
     var showScissorMarks by mutableStateOf(true)
     var selectedPaperSize by mutableStateOf(PaperSize.POSTCARD_4X6)
+
+    // ── Persistent Custom Preset & Custom Paper Storage ────────────
+    private val customPresetRepo = CustomPresetRepository(application)
+    val customPhotoSpecs = MutableStateFlow<List<CustomPhotoSpec>>(emptyList())
+    val customPaperSizes = MutableStateFlow<List<PaperSize>>(emptyList())
+
+    init {
+        loadPersistedCustomPresets()
+    }
+
+    private fun loadPersistedCustomPresets() {
+        val specs = customPresetRepo.getCustomPhotoSpecs()
+        customPhotoSpecs.value = specs
+        val papers = customPresetRepo.getCustomPapers()
+        customPaperSizes.value = papers.map { PaperSize.fromDefinition(it) }
+    }
+
+    fun getAllPhotoSpecs(): List<PhotoSpec> {
+        return PassportTemplate.entries.toList() + customPhotoSpecs.value
+    }
+
+    fun getAllPaperSizes(): List<PaperSize> {
+        return PaperSize.entries + customPaperSizes.value
+    }
+
+    fun addCustomPhotoSpec(spec: CustomPhotoSpec) {
+        customPresetRepo.saveCustomPhotoSpec(spec)
+        customPhotoSpecs.value = customPresetRepo.getCustomPhotoSpecs()
+        selectTemplate(spec)
+    }
+
+    fun deleteCustomPhotoSpec(spec: PhotoSpec) {
+        customPresetRepo.deleteCustomPhotoSpec(spec.id)
+        customPhotoSpecs.value = customPresetRepo.getCustomPhotoSpecs()
+        if (_uiState.value.selectedTemplate.id == spec.id) {
+            selectTemplate(PassportTemplate.INDIAN_PASSPORT)
+        }
+    }
+
+    fun addCustomPaperDefinition(paperDef: PrintPaperDefinition) {
+        customPresetRepo.saveCustomPaper(paperDef)
+        val updated = customPresetRepo.getCustomPapers()
+        customPaperSizes.value = updated.map { PaperSize.fromDefinition(it) }
+        val newPaperSize = PaperSize.fromDefinition(paperDef)
+        setPaperSizeTarget(newPaperSize)
+    }
+
+    fun deleteCustomPaper(paper: PaperSize) {
+        customPresetRepo.deleteCustomPaper(paper.id)
+        val updated = customPresetRepo.getCustomPapers()
+        customPaperSizes.value = updated.map { PaperSize.fromDefinition(it) }
+        if (selectedPaperSize.id == paper.id) {
+            setPaperSizeTarget(PaperSize.POSTCARD_4X6)
+        }
+    }
 
     // ── 1-Tap Batch Passport Studio Queue & State ─────────────────
     val batchQueue = mutableStateListOf<BatchItem>()
@@ -853,8 +911,13 @@ class StudioViewModel(application: Application) : AndroidViewModel(application) 
         }
     }
 
-    fun selectTemplate(template: PassportTemplate) {
-        _uiState.update { it.copy(selectedTemplate = template) }
+    fun selectTemplate(template: PhotoSpec) {
+        _uiState.update {
+            it.copy(
+                selectedTemplate = template,
+                cropPreset = CropRatioPreset.fromPhotoSpec(template)
+            )
+        }
         recalculateGrid()
     }
 

@@ -330,8 +330,8 @@ fun CameraScreen(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    items(PassportTemplate.entries.toTypedArray()) { template ->
-                        val isSelected = uiState.selectedTemplate == template
+                    items(viewModel.getAllPhotoSpecs()) { template ->
+                        val isSelected = uiState.selectedTemplate.id == template.id
                         Surface(
                             shape = RoundedCornerShape(12.dp),
                             color = if (isSelected) Blue60 else Navy20,
