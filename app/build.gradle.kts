@@ -2,7 +2,6 @@ plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
-    id("kotlin-kapt")
 }
 
 android {
@@ -102,11 +101,6 @@ dependencies {
     // Google ML Kit Selfie Segmentation & Face Detection
     implementation(libs.mlkit.segmentation.selfie)
     implementation(libs.mlkit.face.detection)
-
-    // Room Database
-    implementation(libs.androidx.room.runtime)
-    implementation(libs.androidx.room.ktx)
-    kapt(libs.androidx.room.compiler)
 
     // Debug
     debugImplementation(libs.androidx.ui.tooling)

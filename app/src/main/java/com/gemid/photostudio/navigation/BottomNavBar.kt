@@ -20,11 +20,6 @@ fun BottomNavBar(navController: NavController) {
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = navBackStackEntry?.destination?.route
 
-    // Hide bottom navigation on full-screen Camera preview or Manual Mask Refine Screen
-    if (currentRoute == Screen.Camera.route || currentRoute == Screen.BackgroundBrush.route) {
-        return
-    }
-
     NavigationBar(
         containerColor = MaterialTheme.colorScheme.surface,
         contentColor = MaterialTheme.colorScheme.onSurface,

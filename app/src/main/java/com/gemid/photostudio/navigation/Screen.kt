@@ -15,18 +15,13 @@ sealed class Screen(
 ) {
     data object Home : Screen("home", "Home", Icons.Rounded.Home)
     data object Studio : Screen("studio", "Studio", Icons.Rounded.PhotoCamera)
-    data object Camera : Screen("camera", "Camera", Icons.Rounded.PhotoCamera)
-    data object BatchStudio : Screen("batch_studio", "Batch Studio", Icons.Rounded.AutoAwesome)
     data object SheetLayout : Screen("sheet_layout", "Sheets", Icons.Rounded.GridView)
     data object Export : Screen("export", "Export", Icons.Rounded.Share)
-    data object BackgroundBrush : Screen("background_brush", "Refine Mask", Icons.Rounded.AutoAwesome)
-    data object Kiosk : Screen("kiosk", "Express Kiosk", Icons.Rounded.AutoAwesome)
 }
 
 val bottomNavScreens = listOf(
     Screen.Home,
     Screen.Studio,
-    Screen.BatchStudio,
     Screen.SheetLayout,
     Screen.Export
 )

@@ -4,15 +4,7 @@
     @androidx.compose.runtime.Composable <methods>;
 }
 
-# Room Database rules
--keepclassmembers class * extends androidx.room.RoomDatabase {
-    <init>();
-}
--keep class * extends androidx.room.RoomDatabase
--dontwarn androidx.room.paging.**
--keep @androidx.room.Entity class * { *; }
--keep @androidx.room.Dao interface * { *; }
--keep class com.gemid.photostudio.data.order.** { *; }
+# Data Models
 -keep class com.gemid.photostudio.data.model.** { *; }
 
 # Google ML Kit (Selfie Segmentation & Face Detection)

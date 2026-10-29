@@ -2,6 +2,9 @@ package com.gemid.photostudio.ui.screens
 
 import android.graphics.Bitmap
 import android.net.Uri
+import java.io.File
+import androidx.core.content.FileProvider
+import androidx.compose.ui.platform.LocalContext
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
@@ -143,6 +146,17 @@ fun StudioEditorScreen(
     var currentCanvasSize by remember { mutableStateOf(Size.Zero) }
     var showCustomPhotoSpecDialog by remember { mutableStateOf(false) }
 
+    val context = LocalContext.current
+    var tempCameraUri by remember { mutableStateOf<Uri?>(null) }
+    val cameraLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.TakePicture()
+    ) { success: Boolean ->
+        val uri = tempCameraUri
+        if (success && uri != null) {
+            viewModel.loadFromGallery(uri)
+        }
+    }
+
     val galleryLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.PickVisualMedia()
     ) { uri: Uri? ->
@@ -151,10 +165,26 @@ fun StudioEditorScreen(
         }
     }
 
+    val onSnapCamera: () -> Unit = {
+        try {
+            val photoFile = File.createTempFile("gemid_studio_cam_", ".jpg", context.cacheDir)
+            val uri = FileProvider.getUriForFile(
+                context,
+                "com.gemid.photostudio.fileprovider",
+                photoFile
+            )
+            tempCameraUri = uri
+            cameraLauncher.launch(uri)
+        } catch (_: Exception) {
+            galleryLauncher.launch(
+                PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+            )
+        }
+    }
+
     val tools = listOf(
         "Crop" to Icons.Rounded.Crop,
         "Backdrop" to Icons.Rounded.Wallpaper,
-        "Refine" to Icons.Rounded.Brush,
         "Tone" to Icons.Rounded.Tune,
         "Exam Stamp" to Icons.Rounded.Badge,
         "Rotate" to Icons.Rounded.RotateRight
@@ -373,7 +403,7 @@ fun StudioEditorScreen(
                                 shape = CircleShape,
                                 color = Navy10.copy(alpha = 0.9f),
                                 border = BorderStroke(1.dp, AccentCyan.copy(alpha = 0.5f)),
-                                modifier = Modifier.clickable { navController.navigate(Screen.Camera.route) }
+                                modifier = Modifier.clickable { onSnapCamera() }
                             ) {
                                 Icon(
                                     Icons.Rounded.CameraAlt,
@@ -446,7 +476,7 @@ fun StudioEditorScreen(
 
                         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                             Button(
-                                onClick = { navController.navigate(Screen.Camera.route) },
+                                onClick = { onSnapCamera() },
                                 colors = ButtonDefaults.buttonColors(containerColor = Blue60),
                                 shape = RoundedCornerShape(12.dp)
                             ) {
@@ -515,20 +545,12 @@ fun StudioEditorScreen(
                             // ── 2. Background Replacement Engine ─────
                             BackdropControlsPanel(
                                 currentBackdrop = uiState.currentBackdrop,
-                                onSelectBackdrop = { viewModel.replaceBackground(it) },
-                                onOpenRefineBrush = { navController.navigate(Screen.BackgroundBrush.route) }
+                                onSelectBackdrop = { viewModel.replaceBackground(it) }
                             )
                         }
 
                         2 -> {
-                            // ── 3. Manual Mask Refinement Tool ───────
-                            RefineBrushLauncherPanel(
-                                onLaunch = { navController.navigate(Screen.BackgroundBrush.route) }
-                            )
-                        }
-
-                        3 -> {
-                            // ── 4. Tone & Color Adjustments ──────────
+                            // ── 3. Tone & Color Adjustments ──────────
                             ToneControlsPanel(
                                 adjustments = uiState.toneAdjustments,
                                 onUpdate = { viewModel.updateToneAdjustments(it) },
@@ -537,8 +559,8 @@ fun StudioEditorScreen(
                             )
                         }
 
-                        4 -> {
-                            // ── 5. Indian Exam Name & Date Banner ────
+                        3 -> {
+                            // ── 4. Indian Exam Name & Date Banner ────
                             ExamStampControlsPanel(
                                 config = uiState.examStampConfig,
                                 onUpdate = { viewModel.updateExamStampConfig(it) },
@@ -546,8 +568,8 @@ fun StudioEditorScreen(
                             )
                         }
 
-                        5 -> {
-                            // ── 6. Rotation ──────────────────────────
+                        4 -> {
+                            // ── 5. Rotation ──────────────────────────
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
                                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -776,8 +798,7 @@ private fun CropperControlsPanel(
 @Composable
 private fun BackdropControlsPanel(
     currentBackdrop: StudioBackdrop,
-    onSelectBackdrop: (StudioBackdrop) -> Unit,
-    onOpenRefineBrush: () -> Unit
+    onSelectBackdrop: (StudioBackdrop) -> Unit
 ) {
     Column {
         Text(
@@ -787,7 +808,7 @@ private fun BackdropControlsPanel(
             color = AccentCyan
         )
         Text(
-            text = "AI portrait segmentation with clean solid studio backdrops",
+            text = "Offline AI portrait segmentation with solid studio backdrops",
             style = MaterialTheme.typography.bodySmall,
             color = Neutral80
         )
@@ -829,98 +850,6 @@ private fun BackdropControlsPanel(
                     }
                 }
             }
-        }
-
-        Spacer(modifier = Modifier.height(10.dp))
-
-        // Refine Brush Launcher Button
-        Surface(
-            shape = RoundedCornerShape(12.dp),
-            color = Navy15,
-            border = BorderStroke(1.dp, AccentCyan.copy(alpha = 0.5f)),
-            modifier = Modifier
-                .fillMaxWidth()
-                .clickable(onClick = onOpenRefineBrush)
-        ) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 12.dp, vertical = 8.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Box(
-                        modifier = Modifier
-                            .size(32.dp)
-                            .clip(RoundedCornerShape(8.dp))
-                            .background(AccentCyan.copy(alpha = 0.18f)),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            Icons.Rounded.Brush,
-                            contentDescription = null,
-                            tint = AccentCyan,
-                            modifier = Modifier.size(18.dp)
-                        )
-                    }
-                    Spacer(modifier = Modifier.width(10.dp))
-                    Column {
-                        Text(
-                            text = "Manual Refine Brush (Erase & Restore)",
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = Color.White
-                        )
-                        Text(
-                            text = "Touch-paint to fix clipped hair, ears, or stray background",
-                            fontSize = 10.sp,
-                            color = Neutral80
-                        )
-                    }
-                }
-                Icon(
-                    Icons.Rounded.AutoFixHigh,
-                    contentDescription = null,
-                    tint = AccentCyan,
-                    modifier = Modifier.size(18.dp)
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun RefineBrushLauncherPanel(
-    onLaunch: () -> Unit
-) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = "Manual Background Refinement",
-                style = MaterialTheme.typography.titleSmall,
-                fontWeight = FontWeight.Bold,
-                color = AccentCyan
-            )
-            Text(
-                text = "Touch-paint to erase background or restore clipped hair strands, ears & shoulders.",
-                style = MaterialTheme.typography.bodySmall,
-                color = Neutral80
-            )
-        }
-        Spacer(modifier = Modifier.width(12.dp))
-        Button(
-            onClick = onLaunch,
-            colors = ButtonDefaults.buttonColors(containerColor = Blue60),
-            shape = RoundedCornerShape(12.dp)
-        ) {
-            Icon(Icons.Rounded.Brush, contentDescription = null, modifier = Modifier.size(16.dp))
-            Spacer(modifier = Modifier.width(6.dp))
-            Text("Open Brush", fontWeight = FontWeight.Bold)
         }
     }
 }

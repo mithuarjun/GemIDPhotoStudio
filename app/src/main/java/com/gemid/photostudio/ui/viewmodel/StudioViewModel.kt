@@ -10,9 +10,6 @@ import com.gemid.photostudio.data.local.CustomPresetRepository
 import com.gemid.photostudio.data.model.CustomPhotoSpec
 import com.gemid.photostudio.data.model.PassportTemplate
 import com.gemid.photostudio.data.model.PhotoSpec
-import com.gemid.photostudio.data.order.AppDatabase
-import com.gemid.photostudio.data.order.OrderEntity
-import com.gemid.photostudio.data.order.OrderRepository
 import com.gemid.photostudio.editor.BackgroundEngine
 import com.gemid.photostudio.editor.CropRatioPreset
 import com.gemid.photostudio.editor.ExamStampConfig
@@ -35,18 +32,12 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
-import com.gemid.photostudio.batch.AutoPassportOptimizer
-import com.gemid.photostudio.batch.BatchItem
-import com.gemid.photostudio.batch.BatchItemStatus
-import com.gemid.photostudio.batch.BatchStudioConfig
 import com.gemid.photostudio.editor.ImageProcessor
 import com.gemid.photostudio.sheet.PaperSize
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -158,244 +149,7 @@ class StudioViewModel(application: Application) : AndroidViewModel(application) 
         }
     }
 
-    // ── Offline Room Order History Database & Repository ──────────
-    private val orderDatabase = AppDatabase.getInstance(application)
-    val orderRepository = OrderRepository(orderDatabase.orderDao(), application)
 
-    val recentOrders: StateFlow<List<OrderEntity>> = orderRepository.recentOrders
-        .stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
-    val allOrders: StateFlow<List<OrderEntity>> = orderRepository.allOrders
-        .stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
-    val orderCount: StateFlow<Int> = orderRepository.orderCount
-        .stateIn(viewModelScope, SharingStarted.Lazily, 0)
-
-    fun recordOrder(
-        customerName: String = "",
-        exportFormat: String = "JPEG"
-    ) {
-        val sheetBitmap = _uiState.value.generatedSheetBitmap ?: _uiState.value.activeBitmap ?: return
-        viewModelScope.launch {
-            try {
-                orderRepository.recordOrder(
-                    bitmap = sheetBitmap,
-                    customerName = customerName.ifBlank { _uiState.value.examStampConfig.candidateName },
-                    photoSpec = _uiState.value.selectedTemplate,
-                    paperSize = selectedPaperSize,
-                    photoCount = _uiState.value.computedGridResult.activeCount,
-                    isLandscape = _uiState.value.isSheetLandscape,
-                    exportFormat = exportFormat
-                )
-            } catch (_: Exception) {}
-        }
-    }
-
-    fun reloadOrder(order: OrderEntity, onComplete: () -> Unit = {}) {
-        viewModelScope.launch {
-            _uiState.update { it.copy(isLoading = true, loadingMessage = "Reloading customer order...") }
-            try {
-                val loadedBitmap = orderRepository.loadOrderBitmap(order)
-                if (loadedBitmap != null) {
-                    val spec = getAllPhotoSpecs().find { it.id == order.photoSpecId }
-                        ?: getAllPhotoSpecs().find { it.title == order.photoSpecTitle }
-                        ?: PassportTemplate.INDIAN_PASSPORT
-
-                    val paper = getAllPaperSizes().find { it.id == order.paperSizeId }
-                        ?: getAllPaperSizes().find { it.title == order.paperSize }
-                        ?: PaperSize.POSTCARD_4X6
-
-                    selectedPaperSize = paper
-                    photoList.clear()
-                    photoList.add(loadedBitmap)
-
-                    _uiState.update {
-                        it.copy(
-                            activeBitmap = loadedBitmap,
-                            unsegmentedBitmap = loadedBitmap,
-                            photoWidth = loadedBitmap.width,
-                            photoHeight = loadedBitmap.height,
-                            selectedTemplate = spec,
-                            selectedPaper = paper.definition,
-                            isSheetLandscape = order.isLandscape,
-                            customSheetPhotoCount = order.photoCount,
-                            cropPreset = CropRatioPreset.fromPhotoSpec(spec),
-                            isLoading = false,
-                            loadingMessage = ""
-                        )
-                    }
-
-                    recalculateGrid()
-                    generateMasterSheetBitmap {
-                        onComplete()
-                    }
-                } else {
-                    _uiState.update {
-                        it.copy(
-                            isLoading = false,
-                            loadingMessage = "",
-                            errorMessage = "Order photo archive could not be found."
-                        )
-                    }
-                }
-            } catch (e: Exception) {
-                _uiState.update {
-                    it.copy(
-                        isLoading = false,
-                        loadingMessage = "",
-                        errorMessage = "Failed to reload order: ${e.localizedMessage}"
-                    )
-                }
-            }
-        }
-    }
-
-    fun deleteOrder(order: OrderEntity) {
-        viewModelScope.launch {
-            orderRepository.deleteOrder(order)
-        }
-    }
-
-    fun clearAllOrders() {
-        viewModelScope.launch {
-            orderRepository.clearAllOrders()
-        }
-    }
-
-    // ── 1-Tap Batch Passport Studio Queue & State ─────────────────
-    val batchQueue = mutableStateListOf<BatchItem>()
-    var isBatchProcessing by mutableStateOf(false)
-    var batchProgress by mutableStateOf(0f)
-    var batchProgressText by mutableStateOf("")
-    var batchConfig by mutableStateOf(BatchStudioConfig())
-
-    fun addBatchUris(context: Context, uris: List<Uri>) {
-        if (uris.isEmpty()) return
-        viewModelScope.launch {
-            for (uri in uris) {
-                try {
-                    val norm = ImageUtils.processAndNormalizeImage(context, uri)
-                    batchQueue.add(
-                        BatchItem(
-                            sourceUri = uri,
-                            rawBitmap = norm.bitmap
-                        )
-                    )
-                } catch (_: Exception) {}
-            }
-        }
-    }
-
-    fun addBatchBitmap(bitmap: Bitmap) {
-        batchQueue.add(
-            BatchItem(rawBitmap = bitmap)
-        )
-    }
-
-    fun removeBatchItem(index: Int) {
-        if (index in batchQueue.indices) {
-            batchQueue.removeAt(index)
-        }
-    }
-
-    fun clearBatchQueue() {
-        batchQueue.clear()
-        isBatchProcessing = false
-        batchProgress = 0f
-        batchProgressText = ""
-    }
-
-    fun updateBatchConfig(config: BatchStudioConfig) {
-        batchConfig = config
-        selectedPaperSize = config.paperSize
-        selectPaper(config.paperSize.definition)
-    }
-
-    fun runBatchOptimizationPipeline(onComplete: (Bitmap) -> Unit = {}) {
-        if (batchQueue.isEmpty() || isBatchProcessing) return
-
-        viewModelScope.launch {
-            isBatchProcessing = true
-            batchProgress = 0f
-            batchProgressText = "Starting 1-Tap Batch Studio..."
-
-            val total = batchQueue.size
-            val optimizedPhotos = mutableListOf<Bitmap>()
-
-            for (index in 0 until total) {
-                val item = batchQueue[index]
-                batchQueue[index] = item.copy(
-                    status = BatchItemStatus.PROCESSING,
-                    currentStep = "Optimizing photo ${index + 1} of $total..."
-                )
-
-                try {
-                    val optimized = AutoPassportOptimizer.optimizePassportPhoto(
-                        rawBitmap = item.rawBitmap,
-                        template = batchConfig.template,
-                        targetBackdrop = batchConfig.backdrop,
-                        autoCrop = batchConfig.autoCrop,
-                        autoCleanBackground = batchConfig.autoCleanBackground,
-                        autoEnhanceTone = batchConfig.autoEnhanceTone,
-                        onStepUpdate = { step ->
-                            batchProgressText = "Photo ${index + 1}/$total: $step"
-                            if (index in batchQueue.indices) {
-                                batchQueue[index] = batchQueue[index].copy(currentStep = step)
-                            }
-                        }
-                    )
-
-                    optimizedPhotos.add(optimized)
-                    batchQueue[index] = batchQueue[index].copy(
-                        status = BatchItemStatus.COMPLETED,
-                        currentStep = "Ready",
-                        optimizedBitmap = optimized
-                    )
-                } catch (e: Exception) {
-                    batchQueue[index] = batchQueue[index].copy(
-                        status = BatchItemStatus.FAILED,
-                        currentStep = "Failed",
-                        errorMessage = e.localizedMessage
-                    )
-                }
-
-                batchProgress = (index + 1) / total.toFloat()
-            }
-
-            // Populate the studio photoList with all optimized portraits
-            if (optimizedPhotos.isNotEmpty()) {
-                photoList.clear()
-                photoList.addAll(optimizedPhotos)
-
-                // Generate the composite 300 DPI mixed print sheet
-                batchProgressText = "Assembling ${batchConfig.paperSize.title} 300 DPI sheet..."
-                val composite = ImageProcessor.createMixedPrintSheet(
-                    photos = optimizedPhotos,
-                    paperSize = batchConfig.paperSize,
-                    template = batchConfig.template,
-                    isLandscape = false,
-                    showBorders = batchConfig.showBorders,
-                    borderColor = borderColor,
-                    borderWidth = borderWidth,
-                    showScissorMarks = batchConfig.showScissorMarks
-                )
-
-                _uiState.update {
-                    it.copy(
-                        generatedSheetBitmap = composite,
-                        selectedTemplate = batchConfig.template,
-                        selectedPaper = batchConfig.paperSize.definition
-                    )
-                }
-                selectedPaperSize = batchConfig.paperSize
-                isBatchProcessing = false
-                batchProgress = 1f
-                batchProgressText = "Batch Complete! ${optimizedPhotos.size} photos ready."
-                onComplete(composite)
-            } else {
-                isBatchProcessing = false
-                batchProgressText = "No photos could be processed."
-            }
-        }
-    }
 
     fun addPhotoToQueue(bitmap: Bitmap) {
         photoList.add(bitmap)
@@ -752,7 +506,7 @@ class StudioViewModel(application: Application) : AndroidViewModel(application) 
     }
 
     /**
-     * Commits manually refined mask and composite photo from BackgroundBrushScreen.
+     * Commits a refined mask and composite photo into the studio pipeline.
      */
     fun applyRefinedMaskBitmap(refinedBitmap: Bitmap, mask: ByteArray) {
         val current = _uiState.value.activeBitmap
@@ -944,7 +698,6 @@ class StudioViewModel(application: Application) : AndroidViewModel(application) 
                     dpi = 300
                 )
                 _uiState.update { it.copy(isLoading = false, loadingMessage = "") }
-                recordOrder(exportFormat = format.name)
                 onSuccess(result)
             } catch (e: Exception) {
                 _uiState.update { it.copy(isLoading = false, loadingMessage = "", errorMessage = e.localizedMessage) }
@@ -977,7 +730,6 @@ class StudioViewModel(application: Application) : AndroidViewModel(application) 
                     isLandscape = isLandscape
                 )
                 _uiState.update { it.copy(isLoading = false, loadingMessage = "") }
-                recordOrder(exportFormat = "PDF")
                 onSuccess(result)
             } catch (e: Exception) {
                 _uiState.update { it.copy(isLoading = false, loadingMessage = "", errorMessage = e.localizedMessage) }
