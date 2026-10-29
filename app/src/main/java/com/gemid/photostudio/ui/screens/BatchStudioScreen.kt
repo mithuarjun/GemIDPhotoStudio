@@ -102,6 +102,7 @@ import com.gemid.photostudio.editor.StudioBackdrop
 import com.gemid.photostudio.export.ExportFormat
 import com.gemid.photostudio.export.HighDpiExporter
 import com.gemid.photostudio.export.PdfDocumentGenerator
+import com.gemid.photostudio.export.PdfExportResult
 import com.gemid.photostudio.export.WifiPrintHelper
 import com.gemid.photostudio.navigation.Screen
 import com.gemid.photostudio.sheet.PaperSize
@@ -560,19 +561,13 @@ fun BatchStudioScreen(
                         // Direct Wi-Fi Print
                         Button(
                             onClick = {
-                                val activity = context as? Activity
-                                if (activity != null) {
-                                    WifiPrintHelper.printBitmapDirectly(
-                                        activity = activity,
-                                        bitmap = generatedSheet,
-                                        jobName = "GemID_Batch_${config.paperSize.id}",
-                                        paper = config.paperSize.definition
-                                    )
-                                } else {
-                                    coroutineScope.launch {
-                                        snackbarHostState.showSnackbar("Unable to access print service")
-                                    }
-                                }
+                                WifiPrintHelper.printSheet(
+                                    context = context,
+                                    sheetBitmap = generatedSheet,
+                                    paper = config.paperSize.definition,
+                                    isLandscape = false,
+                                    jobTitle = "GemID_Batch_${config.paperSize.id}"
+                                )
                             },
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -620,14 +615,14 @@ fun BatchStudioScreen(
                             // Export PDF
                             OutlinedButton(
                                 onClick = {
-                                    viewModel.exportPdfDocument(
+                                    viewModel.exportSheetPdf(
                                         context = context,
-                                        onSuccess = { res ->
+                                        onSuccess = { res: PdfExportResult ->
                                             coroutineScope.launch {
                                                 snackbarHostState.showSnackbar("Exported scale-accurate PDF: ${res.fileName}")
                                             }
                                         },
-                                        onError = { err ->
+                                        onError = { err: String ->
                                             coroutineScope.launch { snackbarHostState.showSnackbar(err) }
                                         }
                                     )

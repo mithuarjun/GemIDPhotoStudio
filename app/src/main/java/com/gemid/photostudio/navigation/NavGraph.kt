@@ -53,5 +53,8 @@ fun NavGraph(
         composable(Screen.BackgroundBrush.route) {
             com.gemid.photostudio.ui.screens.BackgroundBrushScreen(navController = navController, viewModel = viewModel)
         }
+        composable(Screen.Kiosk.route) {
+            com.gemid.photostudio.ui.screens.KioskModeScreen(navController = navController, viewModel = viewModel)
+        }
     }
 }

@@ -20,6 +20,7 @@ sealed class Screen(
     data object SheetLayout : Screen("sheet_layout", "Sheets", Icons.Rounded.GridView)
     data object Export : Screen("export", "Export", Icons.Rounded.Share)
     data object BackgroundBrush : Screen("background_brush", "Refine Mask", Icons.Rounded.AutoAwesome)
+    data object Kiosk : Screen("kiosk", "Express Kiosk", Icons.Rounded.AutoAwesome)
 }
 
 val bottomNavScreens = listOf(

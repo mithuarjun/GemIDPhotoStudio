@@ -7,6 +7,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -23,20 +24,28 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.ArrowForward
 import androidx.compose.material.icons.rounded.Assignment
+import androidx.compose.material.icons.rounded.AutoAwesome
 import androidx.compose.material.icons.rounded.CameraAlt
 import androidx.compose.material.icons.rounded.Collections
 import androidx.compose.material.icons.rounded.Dashboard
+import androidx.compose.material.icons.rounded.Delete
+import androidx.compose.material.icons.rounded.FlashOn
 import androidx.compose.material.icons.rounded.FolderOpen
 import androidx.compose.material.icons.rounded.GridView
+import androidx.compose.material.icons.rounded.History
 import androidx.compose.material.icons.rounded.Image
 import androidx.compose.material.icons.rounded.PhotoLibrary
 import androidx.compose.material.icons.rounded.Print
 import androidx.compose.material.icons.rounded.Settings
+import com.gemid.photostudio.data.order.OrderEntity
+import java.io.File
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -49,6 +58,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
@@ -93,6 +103,8 @@ fun HomeScreen(
     viewModel: StudioViewModel
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    val recentOrders by viewModel.recentOrders.collectAsState()
+    val orderCount by viewModel.orderCount.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
 
     // Single Visual Media Gallery Picker
@@ -252,6 +264,81 @@ fun HomeScreen(
                     )
                 }
 
+                // ── Commercial Express Kiosk Mode Card ──────────────
+                item {
+                    Card(
+                        shape = RoundedCornerShape(18.dp),
+                        colors = CardDefaults.cardColors(containerColor = Navy20),
+                        border = BorderStroke(1.5.dp, Color(0xFFF59E0B).copy(alpha = 0.6f)),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { navController.navigate(Screen.Kiosk.route) }
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(16.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Surface(
+                                shape = RoundedCornerShape(14.dp),
+                                color = Color(0xFFF59E0B).copy(alpha = 0.2f),
+                                border = BorderStroke(1.dp, Color(0xFFF59E0B)),
+                                modifier = Modifier.size(54.dp)
+                            ) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    Icon(
+                                        Icons.Rounded.FlashOn,
+                                        contentDescription = null,
+                                        tint = Color(0xFFF59E0B),
+                                        modifier = Modifier.size(28.dp)
+                                    )
+                                }
+                            }
+
+                            Spacer(modifier = Modifier.width(14.dp))
+
+                            Column(modifier = Modifier.weight(1f)) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Text(
+                                        text = "Express Kiosk Mode",
+                                        fontWeight = FontWeight.ExtraBold,
+                                        fontSize = 16.sp,
+                                        color = Color.White
+                                    )
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Surface(
+                                        shape = RoundedCornerShape(6.dp),
+                                        color = Color(0xFFF59E0B)
+                                    ) {
+                                        Text(
+                                            text = "3-STEP FAST",
+                                            fontSize = 9.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = Color.Black,
+                                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                        )
+                                    }
+                                }
+                                Spacer(modifier = Modifier.height(2.dp))
+                                Text(
+                                    text = "Snap → Indian Preset → Instant 4×6 Print Sheet. Designed for speed on retail counters.",
+                                    fontSize = 11.sp,
+                                    color = Neutral80,
+                                    lineHeight = 15.sp
+                                )
+                            }
+
+                            Icon(
+                                Icons.Rounded.ArrowForward,
+                                contentDescription = null,
+                                tint = Color(0xFFF59E0B),
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                    }
+                }
+
                 // Row 1: New Photo (CameraX) + Gallery Picker
                 item {
                     Row(
@@ -336,16 +423,124 @@ fun HomeScreen(
                         )
                         StatCard(
                             label = "Sheets Built",
-                            value = "0",
+                            value = "$orderCount",
                             icon = Icons.Rounded.Print,
                             modifier = Modifier.weight(1f)
                         )
                         StatCard(
                             label = "Templates",
-                            value = "7",
+                            value = "${viewModel.getAllPhotoSpecs().size}",
                             icon = Icons.Rounded.Dashboard,
                             modifier = Modifier.weight(1f)
                         )
+                    }
+                }
+
+                // ── Recent Orders / Repeat Print Tray (Room Database) ──
+                item {
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                Icons.Rounded.History,
+                                contentDescription = null,
+                                tint = AccentCyan,
+                                modifier = Modifier.size(20.dp)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Column {
+                                Text(
+                                    text = "Recent Orders / Repeat Print",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.onBackground
+                                )
+                                Text(
+                                    text = "Tap any client order to instant-reload sheet & print",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = Neutral80
+                                )
+                            }
+                        }
+
+                        if (recentOrders.isNotEmpty()) {
+                            IconButton(
+                                onClick = { viewModel.clearAllOrders() },
+                                modifier = Modifier.size(28.dp)
+                            ) {
+                                Icon(
+                                    Icons.Rounded.Delete,
+                                    contentDescription = "Clear Orders",
+                                    tint = Neutral80.copy(alpha = 0.6f),
+                                    modifier = Modifier.size(16.dp)
+                                )
+                            }
+                        }
+                    }
+                }
+
+                item {
+                    if (recentOrders.isNotEmpty()) {
+                        LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                            items(recentOrders, key = { it.orderId }) { order ->
+                                OrderCard(
+                                    order = order,
+                                    onClick = {
+                                        viewModel.reloadOrder(order) {
+                                            navController.navigate(Screen.SheetLayout.route)
+                                        }
+                                    },
+                                    onDelete = { viewModel.deleteOrder(order) }
+                                )
+                            }
+                        }
+                    } else {
+                        Card(
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(16.dp),
+                            colors = CardDefaults.cardColors(containerColor = Navy20),
+                            border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.08f))
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(18.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(44.dp)
+                                        .clip(CircleShape)
+                                        .background(Navy25),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(
+                                        Icons.Rounded.History,
+                                        contentDescription = null,
+                                        tint = AccentCyan.copy(alpha = 0.7f),
+                                        modifier = Modifier.size(24.dp)
+                                    )
+                                }
+                                Spacer(modifier = Modifier.width(14.dp))
+                                Column {
+                                    Text(
+                                        text = "No Orders in History Yet",
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 13.sp,
+                                        color = Color.White
+                                    )
+                                    Text(
+                                        text = "Saved print sheets and exported jobs will automatically appear here for 1-tap repeat prints.",
+                                        fontSize = 11.sp,
+                                        color = Neutral80
+                                    )
+                                }
+                            }
+                        }
                     }
                 }
 
@@ -505,6 +700,137 @@ private fun StatCard(
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
+        }
+    }
+}
+
+@Composable
+private fun OrderCard(
+    order: OrderEntity,
+    onClick: () -> Unit,
+    onDelete: () -> Unit
+) {
+    Card(
+        modifier = Modifier
+            .width(204.dp)
+            .clickable(onClick = onClick),
+        shape = RoundedCornerShape(18.dp),
+        colors = CardDefaults.cardColors(containerColor = Navy20),
+        border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.12f))
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(12.dp)
+        ) {
+            // Top row: Order ID badge & Delete icon
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Surface(
+                    shape = RoundedCornerShape(6.dp),
+                    color = Blue60.copy(alpha = 0.3f)
+                ) {
+                    Text(
+                        text = order.orderId,
+                        fontSize = 9.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = AccentCyan,
+                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                    )
+                }
+
+                IconButton(
+                    onClick = onDelete,
+                    modifier = Modifier.size(20.dp)
+                ) {
+                    Icon(
+                        Icons.Rounded.Delete,
+                        contentDescription = "Delete Order",
+                        tint = Color.Red.copy(alpha = 0.6f),
+                        modifier = Modifier.size(14.dp)
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            // Sheet / Photo Thumbnail Preview
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(104.dp)
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(Color.White)
+                    .border(1.dp, AccentCyan.copy(alpha = 0.3f), RoundedCornerShape(10.dp)),
+                contentAlignment = Alignment.Center
+            ) {
+                AsyncImage(
+                    model = File(order.photoPath),
+                    contentDescription = "Order Preview",
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Fit
+                )
+            }
+
+            Spacer(modifier = Modifier.height(10.dp))
+
+            // Customer Name & Spec Details
+            Text(
+                text = order.customerName,
+                fontWeight = FontWeight.Bold,
+                fontSize = 13.sp,
+                color = Color.White,
+                maxLines = 1
+            )
+            Text(
+                text = "${order.photoSpecTitle} • ${order.paperSize}",
+                fontSize = 11.sp,
+                color = Neutral80,
+                maxLines = 1
+            )
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            // Bottom row: Repeat Print button & Relative Time
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = order.relativeTimeSpan,
+                    fontSize = 10.sp,
+                    color = Neutral80.copy(alpha = 0.7f)
+                )
+
+                Surface(
+                    shape = RoundedCornerShape(8.dp),
+                    color = Blue60,
+                    modifier = Modifier.clickable(onClick = onClick)
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            Icons.Rounded.Print,
+                            contentDescription = null,
+                            tint = Color.White,
+                            modifier = Modifier.size(12.dp)
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            text = "Repeat",
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color.White
+                        )
+                    }
+                }
+            }
         }
     }
 }

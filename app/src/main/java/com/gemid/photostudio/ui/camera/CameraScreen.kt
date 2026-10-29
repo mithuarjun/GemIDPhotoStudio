@@ -17,6 +17,7 @@ import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.view.PreviewView
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -354,7 +355,7 @@ fun CameraScreen(
                 if (isSequentialBatchMode) {
                     Surface(
                         shape = RoundedCornerShape(20.dp),
-                        color = if (viewModel.batchQueue.isNotEmpty()) Blue60 else Navy25,
+                        color = if (viewModel.batchQueue.isNotEmpty()) Blue60 else Navy20,
                         border = BorderStroke(1.dp, if (viewModel.batchQueue.isNotEmpty()) AccentCyan else Color.White.copy(alpha = 0.2f)),
                         modifier = Modifier
                             .clickable {

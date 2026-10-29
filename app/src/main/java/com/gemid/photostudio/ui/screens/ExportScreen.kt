@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -24,11 +25,14 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.ArrowBack
+import androidx.compose.material.icons.rounded.Calculate
 import androidx.compose.material.icons.rounded.Image
+import androidx.compose.material.icons.rounded.Payments
 import androidx.compose.material.icons.rounded.PictureAsPdf
 import androidx.compose.material.icons.rounded.Print
 import androidx.compose.material.icons.rounded.SaveAlt
 import androidx.compose.material.icons.rounded.Share
+import androidx.compose.material.icons.rounded.TrendingUp
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -43,6 +47,7 @@ import androidx.compose.material3.RadioButtonDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
@@ -58,6 +63,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -72,6 +78,7 @@ import com.gemid.photostudio.export.ExportFormat
 import com.gemid.photostudio.ui.theme.AccentCyan
 import com.gemid.photostudio.ui.theme.AccentTeal
 import com.gemid.photostudio.ui.theme.Blue60
+import com.gemid.photostudio.ui.theme.Navy10
 import com.gemid.photostudio.ui.theme.Navy15
 import com.gemid.photostudio.ui.theme.Navy20
 import com.gemid.photostudio.ui.theme.Neutral80
@@ -89,6 +96,8 @@ fun ExportScreen(
     val uiState by viewModel.uiState.collectAsState()
     var selectedFormat by remember { mutableStateOf("JPEG") }
     var selectedQuality by remember { mutableStateOf("Ultra HD (300 DPI)") }
+    var sheetCost by remember { mutableStateOf(5f) }
+    var customerPrice by remember { mutableStateOf(50f) }
     val snackbarHostState = remember { SnackbarHostState() }
     val coroutineScope = rememberCoroutineScope()
 
@@ -275,6 +284,22 @@ fun ExportScreen(
                         )
                     }
                 }
+            }
+
+            // ── Commercial Shop Pricing & Paper Waste Calculator ───
+            item {
+                ShopPricingCalculator(
+                    paperTitle = grid.paper.title,
+                    totalPhotos = grid.maxCapacity,
+                    photoWidthMm = uiState.selectedTemplate.widthMm,
+                    photoHeightMm = uiState.selectedTemplate.heightMm,
+                    paperWidthMm = grid.paper.widthMm,
+                    paperHeightMm = grid.paper.heightMm,
+                    sheetCost = sheetCost,
+                    customerPrice = customerPrice,
+                    onCostChange = { sheetCost = it },
+                    onPriceChange = { customerPrice = it }
+                )
             }
 
             // ── 4. Export & Action Buttons ──────────────────────────
@@ -507,3 +532,277 @@ private fun QualityOption(
         }
     }
 }
+
+@Composable
+private fun ShopPricingCalculator(
+    paperTitle: String,
+    totalPhotos: Int,
+    photoWidthMm: Float,
+    photoHeightMm: Float,
+    paperWidthMm: Float,
+    paperHeightMm: Float,
+    sheetCost: Float,
+    customerPrice: Float,
+    onCostChange: (Float) -> Unit,
+    onPriceChange: (Float) -> Unit
+) {
+    val totalSheetAreaMm2 = paperWidthMm * paperHeightMm
+    val totalPhotosAreaMm2 = totalPhotos * photoWidthMm * photoHeightMm
+    val utilizationPercent = if (totalSheetAreaMm2 > 0) {
+        ((totalPhotosAreaMm2 / totalSheetAreaMm2) * 100).toInt().coerceIn(0, 100)
+    } else 0
+    val marginWastePercent = (100 - utilizationPercent).coerceIn(0, 100)
+
+    val profitPerSheet = customerPrice - sheetCost
+    val profitMarginPercent = if (customerPrice > 0) ((profitPerSheet / customerPrice) * 100).toInt() else 0
+    val costPerPhoto = if (totalPhotos > 0) sheetCost / totalPhotos else 0f
+    val pricePerPhoto = if (totalPhotos > 0) customerPrice / totalPhotos else 0f
+
+    Text(
+        text = "Commercial Shop Pricing & Paper Waste",
+        style = MaterialTheme.typography.titleMedium,
+        fontWeight = FontWeight.Bold,
+        color = Neutral90
+    )
+    Spacer(modifier = Modifier.height(8.dp))
+
+    Card(
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = Navy20),
+        border = BorderStroke(1.dp, Color(0xFF10B981).copy(alpha = 0.4f))
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(14.dp)
+        ) {
+            // Header: Commercial metrics
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        Icons.Rounded.Calculate,
+                        contentDescription = null,
+                        tint = Color(0xFF10B981),
+                        modifier = Modifier.size(20.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "Sheet Profit & Economics",
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 14.sp,
+                        color = Color.White
+                    )
+                }
+
+                Surface(
+                    shape = RoundedCornerShape(6.dp),
+                    color = Color(0xFF10B981).copy(alpha = 0.2f),
+                    border = BorderStroke(1.dp, Color(0xFF10B981))
+                ) {
+                    Text(
+                        text = "+$profitMarginPercent% MARGIN",
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color(0xFF10B981),
+                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            // Pricing presets
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                // Cost per sheet
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "Paper & Ink Cost",
+                        fontSize = 11.sp,
+                        color = Neutral80
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        listOf(3f, 5f, 8f).forEach { cost ->
+                            val isSel = sheetCost == cost
+                            Surface(
+                                shape = RoundedCornerShape(8.dp),
+                                color = if (isSel) Blue60 else Navy10,
+                                border = BorderStroke(1.dp, if (isSel) AccentCyan else Color.White.copy(alpha = 0.1f)),
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .clickable { onCostChange(cost) }
+                            ) {
+                                Text(
+                                    text = "₹${cost.toInt()}",
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = if (isSel) Color.White else Neutral80,
+                                    textAlign = TextAlign.Center,
+                                    modifier = Modifier.padding(vertical = 6.dp)
+                                )
+                            }
+                        }
+                    }
+                }
+
+                // Retail price per sheet
+                Column(modifier = Modifier.weight(1.3f)) {
+                    Text(
+                        text = "Customer Price / Sheet",
+                        fontSize = 11.sp,
+                        color = Neutral80
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        listOf(40f, 50f, 60f, 80f).forEach { price ->
+                            val isSel = customerPrice == price
+                            Surface(
+                                shape = RoundedCornerShape(8.dp),
+                                color = if (isSel) Color(0xFF10B981).copy(alpha = 0.3f) else Navy10,
+                                border = BorderStroke(1.dp, if (isSel) Color(0xFF10B981) else Color.White.copy(alpha = 0.1f)),
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .clickable { onPriceChange(price) }
+                            ) {
+                                Text(
+                                    text = "₹${price.toInt()}",
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = if (isSel) Color(0xFF10B981) else Neutral80,
+                                    textAlign = TextAlign.Center,
+                                    modifier = Modifier.padding(vertical = 6.dp)
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(14.dp))
+
+            // Profit & Loss Breakdown Row
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(Navy10, RoundedCornerShape(12.dp))
+                    .padding(12.dp),
+                horizontalArrangement = Arrangement.SpaceAround
+            ) {
+                MetricColumn(title = "Sheet Retail", value = "₹${customerPrice.toInt()}", valueColor = Color.White)
+                MetricColumn(title = "Sheet Cost", value = "₹${sheetCost.toInt()}", valueColor = Color(0xFFFB7185))
+                MetricColumn(title = "Net Profit", value = "+₹${profitPerSheet.toInt()}", valueColor = Color(0xFF10B981))
+                MetricColumn(title = "Per Photo", value = "₹${"%.1f".format(pricePerPhoto)}", valueColor = AccentCyan)
+            }
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            // Paper Surface Utilization vs Cutting Margin Waste
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "Paper Surface Utilization",
+                    fontSize = 11.sp,
+                    color = Neutral80
+                )
+                Text(
+                    text = "$utilizationPercent% Print • $marginWastePercent% Margin/Cut",
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = AccentCyan
+                )
+            }
+
+            Spacer(modifier = Modifier.height(6.dp))
+
+            // Dual progress bar
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(8.dp)
+                    .clip(RoundedCornerShape(4.dp))
+                    .background(Color.White.copy(alpha = 0.15f))
+            ) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth(utilizationPercent / 100f)
+                        .fillMaxHeight()
+                        .background(
+                            Brush.horizontalGradient(
+                                listOf(AccentCyan, Color(0xFF10B981))
+                            )
+                        )
+                )
+            }
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            // Daily Revenue Target for Walk-Ins
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                DailyTargetBadge(modifier = Modifier.weight(1f), customers = 10, profit = profitPerSheet * 10)
+                DailyTargetBadge(modifier = Modifier.weight(1f), customers = 25, profit = profitPerSheet * 25)
+                DailyTargetBadge(modifier = Modifier.weight(1f), customers = 50, profit = profitPerSheet * 50)
+            }
+        }
+    }
+}
+
+@Composable
+private fun MetricColumn(
+    title: String,
+    value: String,
+    valueColor: Color
+) {
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Text(text = title, fontSize = 10.sp, color = Neutral80)
+        Spacer(modifier = Modifier.height(2.dp))
+        Text(text = value, fontSize = 13.sp, fontWeight = FontWeight.Bold, color = valueColor)
+    }
+}
+
+@Composable
+private fun DailyTargetBadge(
+    modifier: Modifier = Modifier,
+    customers: Int,
+    profit: Float
+) {
+    Surface(
+        shape = RoundedCornerShape(10.dp),
+        color = Navy10,
+        border = BorderStroke(1.dp, Color.White.copy(alpha = 0.08f)),
+        modifier = modifier
+    ) {
+        Column(
+            modifier = Modifier.padding(8.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Text(text = "$customers Orders/Day", fontSize = 10.sp, color = Neutral80)
+            Spacer(modifier = Modifier.height(2.dp))
+            Text(
+                text = "₹${profit.toInt()} profit",
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Bold,
+                color = Color(0xFF10B981)
+            )
+        }
+    }
+}
+
