@@ -93,6 +93,12 @@ interface PhotoSpec {
     val pixelHeight: Int
         get() = ((heightMm / 25.4f) * standardDpi).toInt()
 
+    val widthPx300Dpi: Int
+        get() = pixelWidth
+
+    val heightPx300Dpi: Int
+        get() = pixelHeight
+
     val dimensionMmLabel: String
         get() = "${String.format(Locale.US, "%.1f", widthMm).removeSuffix(".0")}×${String.format(Locale.US, "%.1f", heightMm).removeSuffix(".0")} mm"
 

@@ -1,14 +1,8 @@
 package com.gemid.photostudio.ui.screens
 
-import android.graphics.Bitmap
-import android.net.Uri
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.PickVisualMediaRequest
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -16,38 +10,25 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.Add
-import androidx.compose.material.icons.rounded.AddPhotoAlternate
 import androidx.compose.material.icons.rounded.ArrowForward
 import androidx.compose.material.icons.rounded.Check
-import androidx.compose.material.icons.rounded.Close
-import androidx.compose.material.icons.rounded.ContentCopy
 import androidx.compose.material.icons.rounded.ContentCut
 import androidx.compose.material.icons.rounded.CropFree
-import androidx.compose.material.icons.rounded.Delete
-import androidx.compose.material.icons.rounded.Grid4x4
-import androidx.compose.material.icons.rounded.Layers
-import androidx.compose.material.icons.rounded.PhotoLibrary
+import androidx.compose.material.icons.rounded.GridView
 import androidx.compose.material.icons.rounded.Print
-import androidx.compose.material.icons.rounded.ScreenRotation
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -57,12 +38,9 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Slider
-import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
@@ -73,66 +51,47 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
-import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
 import com.gemid.photostudio.navigation.Screen
-import com.gemid.photostudio.sheet.CustomPaperSizeDialog
-import com.gemid.photostudio.sheet.GridMatrixResult
 import com.gemid.photostudio.sheet.PaperSize
 import com.gemid.photostudio.ui.theme.AccentCyan
 import com.gemid.photostudio.ui.theme.AccentTeal
-import com.gemid.photostudio.ui.theme.Blue50
-import com.gemid.photostudio.ui.theme.Blue60
 import com.gemid.photostudio.ui.theme.Navy10
 import com.gemid.photostudio.ui.theme.Navy15
 import com.gemid.photostudio.ui.theme.Navy20
 import com.gemid.photostudio.ui.theme.Navy25
-import com.gemid.photostudio.ui.theme.Navy30
-import com.gemid.photostudio.ui.theme.Neutral80
-import com.gemid.photostudio.ui.theme.Neutral90
 import com.gemid.photostudio.ui.viewmodel.StudioViewModel
-import com.gemid.photostudio.util.ImageUtils
 
+/**
+ * Ultra-simplified Fixed-Count Sheet Layout Screen:
+ * - Lets user choose paper size (4x6, 5x7, A4).
+ * - Exact photo count layout: 6, 12, 18, or 24 photos per sheet.
+ * - Automatically computes the grid matrix and renders photo borders, dashed cut lines,
+ *   and physical scissor symbols (✂) in the margins.
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SheetLayoutScreen(
     navController: NavController,
     viewModel: StudioViewModel
 ) {
-    val context = LocalContext.current
-    val uiState by viewModel.uiState.collectAsState()
-    val grid = uiState.computedGridResult
-    val sheetBitmap = uiState.generatedSheetBitmap
+    val masterSheetBitmap by viewModel.masterSheetBitmap.collectAsState()
+    val editedBitmap by viewModel.editedBitmap.collectAsState()
+    val selectedPaper = viewModel.selectedPaperSize
+    val selectedCount = viewModel.selectedPhotoCount
 
-    // Multi-photo picker launcher to import additional photos directly into the queue
-    val addPhotosPickerLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.PickMultipleVisualMedia(maxItems = 12)
-    ) { uris: List<Uri> ->
-        if (uris.isNotEmpty()) {
-            viewModel.addPhotosFromGallery(uris)
-        }
-    }
-
-    var showCustomPaperDialog by remember { mutableStateOf(false) }
-
-    // Ensure initial master sheet is generated
-    LaunchedEffect(Unit) {
-        if (sheetBitmap == null && (viewModel.photoList.isNotEmpty() || uiState.activeBitmap != null)) {
-            viewModel.generateMasterSheetBitmap()
+    // Automatically trigger sheet compositing on entry if needed
+    LaunchedEffect(editedBitmap, selectedPaper, selectedCount) {
+        if (editedBitmap != null && masterSheetBitmap == null) {
+            viewModel.generateMasterSheet()
         }
     }
 
@@ -141,963 +100,303 @@ fun SheetLayoutScreen(
             TopAppBar(
                 title = {
                     Column {
+                        Text("Fixed Sheet Layout", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 18.sp)
                         Text(
-                            text = "Print Sheet Studio",
-                            style = MaterialTheme.typography.titleLarge,
-                            fontWeight = FontWeight.Bold
-                        )
-                        Text(
-                            text = "${viewModel.selectedPaperSize.title} • ${grid.cols}×${grid.rows} Grid @ 300 DPI",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = AccentCyan
+                            text = "${selectedPaper.title} • $selectedCount Photos",
+                            color = AccentCyan,
+                            fontSize = 11.sp
                         )
                     }
                 },
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = Navy10),
                 actions = {
-                    // Orientation Toggle Button
-                    IconButton(onClick = { viewModel.toggleSheetOrientation() }) {
-                        Icon(
-                            Icons.Rounded.ScreenRotation,
-                            contentDescription = "Toggle Orientation",
-                            tint = if (uiState.isSheetLandscape) AccentCyan else Color.White.copy(alpha = 0.7f)
-                        )
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent)
-            )
-        }
-    ) { innerPadding ->
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(innerPadding)
-        ) {
-            LazyColumn(
-                modifier = Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(16.dp),
-                verticalArrangement = Arrangement.spacedBy(16.dp)
-            ) {
-                // ── 1. Live Composite Print Sheet Preview ─────────────
-                item {
-                    LiveSheetPreviewCard(
-                        sheetBitmap = sheetBitmap,
-                        aspectRatio = viewModel.selectedPaperSize.aspectRatio(uiState.isSheetLandscape),
-                        paperTitle = viewModel.selectedPaperSize.title,
-                        photoCount = grid.activeCount,
-                        isLandscape = uiState.isSheetLandscape,
-                        showBorders = viewModel.showBorders,
-                        showScissorMarks = viewModel.showScissorMarks
-                    )
-                }
-
-                // ── 2. Mixed Photo Queue Selection Tray ───────────────
-                item {
-                    Card(
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(18.dp),
-                        colors = CardDefaults.cardColors(containerColor = Navy20)
-                    ) {
-                        Column(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(16.dp)
-                        ) {
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Icon(
-                                        Icons.Rounded.Layers,
-                                        contentDescription = null,
-                                        tint = AccentCyan,
-                                        modifier = Modifier.size(20.dp)
-                                    )
-                                    Spacer(modifier = Modifier.width(8.dp))
-                                    Text(
-                                        text = "Photo Queue (Mixed Sheet)",
-                                        style = MaterialTheme.typography.titleSmall,
-                                        fontWeight = FontWeight.Bold,
-                                        color = AccentCyan
-                                    )
-                                }
-
-                                Surface(
-                                    shape = RoundedCornerShape(8.dp),
-                                    color = Blue60.copy(alpha = 0.25f),
-                                    border = BorderStroke(1.dp, Blue60.copy(alpha = 0.5f))
-                                ) {
-                                    Text(
-                                        text = "${viewModel.photoList.size} Photos",
-                                        color = AccentTeal,
-                                        fontSize = 11.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-                                    )
-                                }
-                            }
-
-                            Spacer(modifier = Modifier.height(6.dp))
-
-                            Text(
-                                text = if (viewModel.photoList.size > 1) {
-                                    "Multiple photos will automatically loop across the ${grid.activeCount} slots on the sheet."
-                                } else {
-                                    "Single photo repeated across all slots. Add more photos for mixed batch printing."
-                                },
-                                style = MaterialTheme.typography.bodySmall,
-                                color = Neutral80
-                            )
-
-                            Spacer(modifier = Modifier.height(12.dp))
-
-                            // Horizontal Photo Queue List
-                            LazyRow(
-                                horizontalArrangement = Arrangement.spacedBy(10.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                itemsIndexed(viewModel.photoList) { index, photo ->
-                                    PhotoQueueItemCard(
-                                        bitmap = photo,
-                                        index = index + 1,
-                                        onRemove = { viewModel.removePhotoFromQueue(index) },
-                                        onDuplicate = { viewModel.duplicatePhotoInQueue(index) }
-                                    )
-                                }
-
-                                // "Add Photos" Action Button
-                                item {
-                                    Surface(
-                                        shape = RoundedCornerShape(14.dp),
-                                        color = Navy25,
-                                        border = BorderStroke(1.5.dp, Blue60.copy(alpha = 0.6f)),
-                                        modifier = Modifier
-                                            .size(width = 84.dp, height = 110.dp)
-                                            .clickable {
-                                                addPhotosPickerLauncher.launch(
-                                                    PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
-                                                )
-                                            }
-                                    ) {
-                                        Column(
-                                            modifier = Modifier.fillMaxSize(),
-                                            horizontalAlignment = Alignment.CenterHorizontally,
-                                            verticalArrangement = Arrangement.Center
-                                        ) {
-                                            Icon(
-                                                Icons.Rounded.AddPhotoAlternate,
-                                                contentDescription = "Add Photos",
-                                                tint = AccentCyan,
-                                                modifier = Modifier.size(26.dp)
-                                            )
-                                            Spacer(modifier = Modifier.height(4.dp))
-                                            Text(
-                                                text = "Add Photo",
-                                                fontSize = 11.sp,
-                                                fontWeight = FontWeight.SemiBold,
-                                                color = Neutral90
-                                            )
-                                        }
-                                    }
-                                }
-                            }
-
-                            Spacer(modifier = Modifier.height(10.dp))
-
-                            // Action buttons: Add active photo or clear queue
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.spacedBy(8.dp)
-                            ) {
-                                if (uiState.activeBitmap != null) {
-                                    OutlinedButton(
-                                        onClick = { viewModel.addActivePhotoToQueue() },
-                                        modifier = Modifier.weight(1f),
-                                        shape = RoundedCornerShape(10.dp),
-                                        border = BorderStroke(1.dp, Blue60)
-                                    ) {
-                                        Icon(Icons.Rounded.Add, contentDescription = null, modifier = Modifier.size(16.dp))
-                                        Spacer(modifier = Modifier.width(4.dp))
-                                        Text("Add Active Photo", fontSize = 11.sp)
-                                    }
-                                }
-
-                                if (viewModel.photoList.size > 1) {
-                                    OutlinedButton(
-                                        onClick = { viewModel.clearPhotoQueue() },
-                                        shape = RoundedCornerShape(10.dp),
-                                        border = BorderStroke(1.dp, Color.Red.copy(alpha = 0.5f))
-                                    ) {
-                                        Icon(Icons.Rounded.Delete, contentDescription = null, tint = Color.Red.copy(alpha = 0.8f), modifier = Modifier.size(16.dp))
-                                        Spacer(modifier = Modifier.width(4.dp))
-                                        Text("Clear", fontSize = 11.sp, color = Color.Red.copy(alpha = 0.9f))
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-
-                // ── 3. Paper Size Targets Selector (4x6, 5x7, A4) ─────
-                item {
-                    Text(
-                        text = "Target Paper Size (300 DPI)",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = Neutral90
-                    )
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Text(
-                        text = "Exact millimeter calibration for photo printers & minilabs",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = Neutral80
-                    )
-                }
-
-                item {
-                    val allPapers = viewModel.getAllPaperSizes()
-                    LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                        items(allPapers) { paper ->
-                            val isSelected = viewModel.selectedPaperSize.id == paper.id
-                            PaperTargetCard(
-                                paperSize = paper,
-                                isLandscape = uiState.isSheetLandscape,
-                                isSelected = isSelected,
-                                onClick = { viewModel.setPaperSizeTarget(paper) },
-                                onDelete = if (paper.isCustom) {
-                                    { viewModel.deleteCustomPaper(paper) }
-                                } else null
-                            )
-                        }
-
-                        item {
-                            Surface(
-                                shape = RoundedCornerShape(16.dp),
-                                color = Navy20,
-                                border = BorderStroke(1.dp, AccentCyan.copy(alpha = 0.5f)),
-                                modifier = Modifier
-                                    .width(138.dp)
-                                    .height(108.dp)
-                                    .clickable { showCustomPaperDialog = true }
-                            ) {
-                                Column(
-                                    modifier = Modifier
-                                        .fillMaxSize()
-                                        .padding(12.dp),
-                                    horizontalAlignment = Alignment.CenterHorizontally,
-                                    verticalArrangement = Arrangement.Center
-                                ) {
-                                    Box(
-                                        modifier = Modifier
-                                            .size(32.dp)
-                                            .clip(CircleShape)
-                                            .background(AccentCyan.copy(alpha = 0.2f)),
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        Icon(
-                                            Icons.Rounded.Add,
-                                            contentDescription = "Add Custom Paper",
-                                            tint = AccentCyan,
-                                            modifier = Modifier.size(18.dp)
-                                        )
-                                    }
-                                    Spacer(modifier = Modifier.height(6.dp))
-                                    Text(
-                                        text = "+ Custom Paper",
-                                        fontWeight = FontWeight.Bold,
-                                        fontSize = 11.sp,
-                                        color = AccentCyan
-                                    )
-                                    Text(
-                                        text = "Any Size / Roll",
-                                        fontSize = 9.sp,
-                                        color = Neutral80
-                                    )
-                                }
-                            }
-                        }
-                    }
-                }
-
-                // ── 4. Photo Borders Configuration ────────────────────
-                item {
-                    Card(
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(18.dp),
-                        colors = CardDefaults.cardColors(containerColor = Navy20)
-                    ) {
-                        Column(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(16.dp)
-                        ) {
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Icon(
-                                        Icons.Rounded.CropFree,
-                                        contentDescription = null,
-                                        tint = AccentCyan,
-                                        modifier = Modifier.size(20.dp)
-                                    )
-                                    Spacer(modifier = Modifier.width(8.dp))
-                                    Column {
-                                        Text(
-                                            text = "Show Photo Borders",
-                                            style = MaterialTheme.typography.titleSmall,
-                                            fontWeight = FontWeight.Bold,
-                                            color = AccentCyan
-                                        )
-                                        Text(
-                                            text = "Delicate border around each passport portrait",
-                                            style = MaterialTheme.typography.bodySmall,
-                                            color = Neutral80
-                                        )
-                                    }
-                                }
-
-                                Switch(
-                                    checked = viewModel.showBorders,
-                                    onCheckedChange = { viewModel.updateBorders(show = it) },
-                                    colors = SwitchDefaults.colors(
-                                        checkedThumbColor = Color.White,
-                                        checkedTrackColor = Blue60
-                                    )
-                                )
-                            }
-
-                            if (viewModel.showBorders) {
-                                Spacer(modifier = Modifier.height(14.dp))
-
-                                Text(
-                                    text = "Border Color",
-                                    fontSize = 12.sp,
-                                    fontWeight = FontWeight.Medium,
-                                    color = Neutral80
-                                )
-
-                                Spacer(modifier = Modifier.height(8.dp))
-
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.spacedBy(10.dp)
-                                ) {
-                                    BorderColorChip(
-                                        label = "Light Grey",
-                                        color = android.graphics.Color.LTGRAY,
-                                        isSelected = viewModel.borderColor == android.graphics.Color.LTGRAY,
-                                        onClick = { viewModel.updateBorders(show = true, color = android.graphics.Color.LTGRAY) }
-                                    )
-                                    BorderColorChip(
-                                        label = "Dark Grey",
-                                        color = android.graphics.Color.DKGRAY,
-                                        isSelected = viewModel.borderColor == android.graphics.Color.DKGRAY,
-                                        onClick = { viewModel.updateBorders(show = true, color = android.graphics.Color.DKGRAY) }
-                                    )
-                                    BorderColorChip(
-                                        label = "Black",
-                                        color = android.graphics.Color.BLACK,
-                                        isSelected = viewModel.borderColor == android.graphics.Color.BLACK,
-                                        onClick = { viewModel.updateBorders(show = true, color = android.graphics.Color.BLACK) }
-                                    )
-                                    BorderColorChip(
-                                        label = "Cyan Studio",
-                                        color = android.graphics.Color.argb(255, 0, 229, 255),
-                                        isSelected = viewModel.borderColor == android.graphics.Color.argb(255, 0, 229, 255),
-                                        onClick = { viewModel.updateBorders(show = true, color = android.graphics.Color.argb(255, 0, 229, 255)) }
-                                    )
-                                }
-
-                                Spacer(modifier = Modifier.height(14.dp))
-
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Text(
-                                        text = "Border Width",
-                                        fontSize = 12.sp,
-                                        color = Neutral80
-                                    )
-                                    Text(
-                                        text = "${viewModel.borderWidth.toInt()} px",
-                                        fontSize = 12.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        color = Neutral90
-                                    )
-                                }
-
-                                Slider(
-                                    value = viewModel.borderWidth,
-                                    onValueChange = { viewModel.updateBorders(show = true, width = it) },
-                                    valueRange = 1f..8f,
-                                    steps = 6,
-                                    colors = SliderDefaults.colors(
-                                        thumbColor = AccentCyan,
-                                        activeTrackColor = Blue50,
-                                        inactiveTrackColor = Navy30
-                                    )
-                                )
-                            }
-                        }
-                    }
-                }
-
-                // ── 5. Scissor Cutting Marks (✂) Controls ─────────────
-                item {
-                    Card(
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(18.dp),
-                        colors = CardDefaults.cardColors(containerColor = Navy20)
-                    ) {
-                        Column(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(16.dp)
-                        ) {
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Icon(
-                                        Icons.Rounded.ContentCut,
-                                        contentDescription = null,
-                                        tint = AccentCyan,
-                                        modifier = Modifier.size(20.dp)
-                                    )
-                                    Spacer(modifier = Modifier.width(8.dp))
-                                    Column {
-                                        Text(
-                                            text = "Scissor Cutting Marks (✂)",
-                                            style = MaterialTheme.typography.titleSmall,
-                                            fontWeight = FontWeight.Bold,
-                                            color = AccentCyan
-                                        )
-                                        Text(
-                                            text = "Dashed trimmer lines & scissor icons in margins",
-                                            style = MaterialTheme.typography.bodySmall,
-                                            color = Neutral80
-                                        )
-                                    }
-                                }
-
-                                Switch(
-                                    checked = viewModel.showScissorMarks,
-                                    onCheckedChange = { viewModel.updateScissorMarks(it) },
-                                    colors = SwitchDefaults.colors(
-                                        checkedThumbColor = Color.White,
-                                        checkedTrackColor = Blue60
-                                    )
-                                )
-                            }
-
-                            if (viewModel.showScissorMarks) {
-                                Spacer(modifier = Modifier.height(10.dp))
-                                Surface(
-                                    shape = RoundedCornerShape(10.dp),
-                                    color = Navy25,
-                                    modifier = Modifier.fillMaxWidth()
-                                ) {
-                                    Row(
-                                        modifier = Modifier.padding(10.dp),
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        Text(
-                                            text = "✂",
-                                            fontSize = 20.sp,
-                                            color = AccentCyan
-                                        )
-                                        Spacer(modifier = Modifier.width(10.dp))
-                                        Text(
-                                            text = "Prints ✂ symbols and dashed guides along sheet gutters for quick slicing with rotary or guillotine paper trimmers.",
-                                            fontSize = 11.sp,
-                                            color = Neutral80,
-                                            lineHeight = 15.sp
-                                        )
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-
-                // ── 6. Grid Photo Count Stepper ───────────────────────
-                item {
-                    Card(
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(18.dp),
-                        colors = CardDefaults.cardColors(containerColor = Navy20)
-                    ) {
-                        Column(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(16.dp)
-                        ) {
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Icon(
-                                        Icons.Rounded.Grid4x4,
-                                        contentDescription = null,
-                                        tint = AccentCyan,
-                                        modifier = Modifier.size(20.dp)
-                                    )
-                                    Spacer(modifier = Modifier.width(8.dp))
-                                    Text(
-                                        text = "Photo Slots to Populate",
-                                        style = MaterialTheme.typography.titleSmall,
-                                        fontWeight = FontWeight.Bold,
-                                        color = AccentCyan
-                                    )
-                                }
-
-                                Surface(
-                                    shape = RoundedCornerShape(8.dp),
-                                    color = Blue60.copy(alpha = 0.2f),
-                                    border = BorderStroke(1.dp, Blue60.copy(alpha = 0.5f))
-                                ) {
-                                    Text(
-                                        text = "${grid.activeCount} / ${grid.maxCapacity}",
-                                        color = AccentTeal,
-                                        fontSize = 11.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-                                    )
-                                }
-                            }
-
-                            Slider(
-                                value = grid.activeCount.toFloat(),
-                                onValueChange = {
-                                    viewModel.setCustomSheetPhotoCount(it.toInt())
-                                    viewModel.generateMasterSheetBitmap()
-                                },
-                                valueRange = 1f..grid.maxCapacity.toFloat(),
-                                steps = maxOf(0, grid.maxCapacity - 2),
-                                colors = SliderDefaults.colors(
-                                    thumbColor = AccentCyan,
-                                    activeTrackColor = Blue50,
-                                    inactiveTrackColor = Navy30
-                                )
-                            )
-
-                            // Quick Fill Presets
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.spacedBy(8.dp)
-                            ) {
-                                if (grid.maxCapacity >= 4) {
-                                    FilterChip(
-                                        selected = grid.activeCount == 4,
-                                        onClick = {
-                                            viewModel.setCustomSheetPhotoCount(4)
-                                            viewModel.generateMasterSheetBitmap()
-                                        },
-                                        label = { Text("4 Photos", fontSize = 11.sp) },
-                                        colors = FilterChipDefaults.filterChipColors(selectedContainerColor = Blue60)
-                                    )
-                                }
-                                if (grid.maxCapacity >= 8) {
-                                    FilterChip(
-                                        selected = grid.activeCount == 8,
-                                        onClick = {
-                                            viewModel.setCustomSheetPhotoCount(8)
-                                            viewModel.generateMasterSheetBitmap()
-                                        },
-                                        label = { Text("8 Photos (2×4)", fontSize = 11.sp) },
-                                        colors = FilterChipDefaults.filterChipColors(selectedContainerColor = Blue60)
-                                    )
-                                }
-                                FilterChip(
-                                    selected = grid.activeCount == grid.maxCapacity,
-                                    onClick = {
-                                        viewModel.setCustomSheetPhotoCount(null)
-                                        viewModel.generateMasterSheetBitmap()
-                                    },
-                                    label = { Text("Fill All (${grid.maxCapacity})", fontSize = 11.sp) },
-                                    colors = FilterChipDefaults.filterChipColors(selectedContainerColor = Blue60)
-                                )
-                            }
-                        }
-                    }
-                }
-
-                // ── 7. Proceed to Export & Print Action ───────────────
-                item {
                     Button(
                         onClick = {
-                            viewModel.generateMasterSheetBitmap {
-                                navController.navigate(Screen.Export.route)
-                            }
+                            navController.navigate(Screen.Export.route)
                         },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(54.dp),
-                        shape = RoundedCornerShape(16.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
+                        enabled = masterSheetBitmap != null,
+                        colors = ButtonDefaults.buttonColors(containerColor = AccentCyan),
+                        shape = RoundedCornerShape(12.dp)
                     ) {
+                        Text("Next: Export", color = Navy10, fontWeight = FontWeight.Bold)
+                        Spacer(modifier = Modifier.width(4.dp))
                         Icon(
-                            Icons.Rounded.Print,
-                            contentDescription = null,
-                            tint = Color.White,
-                            modifier = Modifier.size(20.dp)
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(
-                            text = "Proceed to Export & Print",
-                            fontSize = 15.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = Color.White
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Icon(
-                            Icons.Rounded.ArrowForward,
-                            contentDescription = null,
-                            tint = Color.White,
-                            modifier = Modifier.size(18.dp)
+                            imageVector = Icons.Rounded.ArrowForward,
+                            contentDescription = "Next",
+                            tint = Navy10,
+                            modifier = Modifier.size(16.dp)
                         )
                     }
-                    Spacer(modifier = Modifier.height(16.dp))
                 }
-            }
-
-            // Loading overlay
-            AnimatedVisibility(
-                visible = uiState.isLoading,
-                enter = fadeIn(),
-                exit = fadeOut()
+            )
+        },
+        containerColor = Navy10
+    ) { padding ->
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding)
+                .padding(horizontal = 16.dp, vertical = 8.dp)
+                .verticalScroll(rememberScrollState()),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            // ── 1. Live 300 DPI Composite Sheet Preview ───────────────────
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(340.dp),
+                shape = RoundedCornerShape(16.dp),
+                colors = CardDefaults.cardColors(containerColor = Navy20),
+                border = androidx.compose.foundation.BorderStroke(1.dp, Navy25)
             ) {
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
-                        .background(Color.Black.copy(alpha = 0.65f)),
+                        .padding(12.dp),
                     contentAlignment = Alignment.Center
                 ) {
-                    Card(
-                        shape = RoundedCornerShape(20.dp),
-                        colors = CardDefaults.cardColors(containerColor = Navy20)
-                    ) {
-                        Column(
-                            modifier = Modifier.padding(28.dp),
-                            horizontalAlignment = Alignment.CenterHorizontally
+                    if (masterSheetBitmap != null) {
+                        // Render physical paper look with white background and subtle frame
+                        Surface(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .clip(RoundedCornerShape(8.dp)),
+                            color = Color.White,
+                            shadowElevation = 8.dp
                         ) {
-                            CircularProgressIndicator(color = Blue60)
-                            Spacer(modifier = Modifier.height(16.dp))
-                            Text(
-                                text = uiState.loadingMessage.ifEmpty { "Generating print sheet..." },
-                                color = Neutral90,
-                                fontWeight = FontWeight.Medium,
-                                fontSize = 14.sp
+                            Image(
+                                bitmap = masterSheetBitmap!!.asImageBitmap(),
+                                contentDescription = "300 DPI Composite Print Sheet",
+                                modifier = Modifier.fillMaxSize()
                             )
+                        }
+
+                        // Badge showing physical scale & scissor icon
+                        Surface(
+                            shape = RoundedCornerShape(10.dp),
+                            color = Navy10.copy(alpha = 0.85f),
+                            border = androidx.compose.foundation.BorderStroke(1.dp, AccentCyan.copy(alpha = 0.4f)),
+                            modifier = Modifier
+                                .align(Alignment.BottomEnd)
+                                .padding(10.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = "✂ 300 DPI • 1:1 Scale",
+                                    color = AccentCyan,
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                        }
+                    } else if (editedBitmap == null) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text("No photo loaded yet", color = Color.Gray, fontSize = 14.sp)
+                            Spacer(modifier = Modifier.height(10.dp))
+                            Button(
+                                onClick = { navController.navigate(Screen.Home.route) },
+                                colors = ButtonDefaults.buttonColors(containerColor = AccentCyan)
+                            ) {
+                                Text("Choose Photo", color = Navy10, fontWeight = FontWeight.Bold)
+                            }
+                        }
+                    } else {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            CircularProgressIndicator(color = AccentCyan)
+                            Spacer(modifier = Modifier.height(12.dp))
+                            Text("Compositing 300 DPI Print Sheet...", color = Color.White, fontSize = 13.sp)
                         }
                     }
                 }
             }
-        }
-    }
 
-    if (showCustomPaperDialog) {
-        CustomPaperSizeDialog(
-            onDismissRequest = { showCustomPaperDialog = false },
-            onConfirm = { customPaperDef ->
-                viewModel.addCustomPaperDefinition(customPaperDef)
-                showCustomPaperDialog = false
-            }
-        )
-    }
-}
+            Spacer(modifier = Modifier.height(16.dp))
 
-// ── Live Composite Sheet Preview Card ────────────────────────────────
-
-@Composable
-private fun LiveSheetPreviewCard(
-    sheetBitmap: Bitmap?,
-    aspectRatio: Float,
-    paperTitle: String,
-    photoCount: Int,
-    isLandscape: Boolean,
-    showBorders: Boolean,
-    showScissorMarks: Boolean
-) {
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(310.dp),
-        shape = RoundedCornerShape(20.dp),
-        colors = CardDefaults.cardColors(containerColor = Navy15),
-        border = BorderStroke(1.5.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.3f))
-    ) {
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(14.dp),
-            contentAlignment = Alignment.Center
-        ) {
-            if (sheetBitmap != null) {
-                Image(
-                    bitmap = sheetBitmap.asImageBitmap(),
-                    contentDescription = "Live 300 DPI Print Sheet Preview",
-                    modifier = Modifier
-                        .fillMaxHeight(0.96f)
-                        .aspectRatio(aspectRatio)
-                        .shadow(14.dp, RoundedCornerShape(4.dp))
-                        .clip(RoundedCornerShape(4.dp))
-                        .background(Color.White),
-                    contentScale = ContentScale.Fit
-                )
-            } else {
-                CircularProgressIndicator(color = Blue60)
-            }
-
-            // Sheet specs badge overlay
-            Surface(
-                modifier = Modifier
-                    .align(Alignment.BottomEnd)
-                    .padding(8.dp),
-                shape = RoundedCornerShape(8.dp),
-                color = Color.Black.copy(alpha = 0.75f),
-                border = BorderStroke(1.dp, Color.White.copy(alpha = 0.15f))
-            ) {
-                Row(
-                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    if (showScissorMarks) {
-                        Text("✂ ", fontSize = 11.sp, color = AccentCyan)
-                    }
-                    Text(
-                        text = "$paperTitle • $photoCount Photos",
-                        fontSize = 10.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        color = Color.White
-                    )
-                }
-            }
-        }
-    }
-}
-
-// ── Sub-Component: Photo Queue Thumbnail Card ────────────────────────
-
-@Composable
-private fun PhotoQueueItemCard(
-    bitmap: Bitmap,
-    index: Int,
-    onRemove: () -> Unit,
-    onDuplicate: () -> Unit
-) {
-    Card(
-        modifier = Modifier
-            .size(width = 84.dp, height = 110.dp),
-        shape = RoundedCornerShape(14.dp),
-        colors = CardDefaults.cardColors(containerColor = Navy25),
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.35f))
-    ) {
-        Box(modifier = Modifier.fillMaxSize()) {
-            Image(
-                bitmap = bitmap.asImageBitmap(),
-                contentDescription = "Queue Photo #$index",
-                modifier = Modifier.fillMaxSize(),
-                contentScale = ContentScale.Crop
-            )
-
-            // Index tag
-            Surface(
-                modifier = Modifier
-                    .align(Alignment.BottomStart)
-                    .padding(4.dp),
-                shape = RoundedCornerShape(6.dp),
-                color = Color.Black.copy(alpha = 0.75f)
-            ) {
-                Text(
-                    text = "#$index",
-                    fontSize = 9.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = AccentCyan,
-                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
-                )
-            }
-
-            // Remove button
-            Surface(
-                modifier = Modifier
-                    .align(Alignment.TopEnd)
-                    .padding(4.dp)
-                    .size(20.dp)
-                    .clickable(onClick = onRemove),
-                shape = CircleShape,
-                color = Color.Black.copy(alpha = 0.8f)
-            ) {
-                Icon(
-                    Icons.Rounded.Close,
-                    contentDescription = "Remove",
-                    tint = Color.White,
-                    modifier = Modifier.padding(3.dp)
-                )
-            }
-
-            // Duplicate button
-            Surface(
-                modifier = Modifier
-                    .align(Alignment.TopStart)
-                    .padding(4.dp)
-                    .size(20.dp)
-                    .clickable(onClick = onDuplicate),
-                shape = CircleShape,
-                color = Color.Black.copy(alpha = 0.8f)
-            ) {
-                Icon(
-                    Icons.Rounded.ContentCopy,
-                    contentDescription = "Duplicate",
-                    tint = Color.White,
-                    modifier = Modifier.padding(4.dp)
-                )
-            }
-        }
-    }
-}
-
-// ── Sub-Component: Paper Size Target Card ────────────────────────────
-
-@Composable
-private fun PaperTargetCard(
-    paperSize: PaperSize,
-    isLandscape: Boolean,
-    isSelected: Boolean,
-    onClick: () -> Unit,
-    onDelete: (() -> Unit)? = null
-) {
-    Card(
-        modifier = Modifier
-            .width(138.dp)
-            .clickable(onClick = onClick),
-        shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = if (isSelected) Navy25 else Navy20
-        ),
-        border = BorderStroke(
-            width = if (isSelected) 2.dp else 1.dp,
-            color = if (isSelected) AccentCyan else Color.White.copy(alpha = 0.12f)
-        )
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(12.dp)
-        ) {
+            // ── 2. Paper Size Selector (4x6, 5x7, A4) ────────────────────
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    text = paperSize.dimensionInches,
+                    text = "Select Paper Size",
+                    color = Color.White,
                     fontWeight = FontWeight.Bold,
-                    fontSize = 13.sp,
-                    color = if (isSelected) AccentCyan else Neutral90,
-                    modifier = Modifier.weight(1f)
+                    fontSize = 15.sp
+                )
+                Text(
+                    text = "Studio Standard",
+                    color = Color.Gray,
+                    fontSize = 12.sp
+                )
+            }
+
+            Spacer(modifier = Modifier.height(10.dp))
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                val papers = listOf(
+                    PaperSize.POSTCARD_4X6 to "4 × 6 Inch",
+                    PaperSize.SIZE_5X7 to "5 × 7 Inch",
+                    PaperSize.A4 to "A4 Sheet"
                 )
 
-                if (onDelete != null) {
-                    IconButton(
-                        onClick = onDelete,
-                        modifier = Modifier.size(20.dp)
+                papers.forEach { (paper, label) ->
+                    val isSelected = selectedPaper.id == paper.id
+                    Surface(
+                        modifier = Modifier
+                            .weight(1f)
+                            .clip(RoundedCornerShape(12.dp))
+                            .clickable { viewModel.setPaper(paper) }
+                            .border(
+                                width = if (isSelected) 1.5.dp else 1.dp,
+                                color = if (isSelected) AccentCyan else Navy25,
+                                shape = RoundedCornerShape(12.dp)
+                            ),
+                        color = if (isSelected) Navy15 else Navy20
                     ) {
-                        Icon(
-                            Icons.Rounded.Close,
-                            contentDescription = "Delete custom paper",
-                            tint = Color.Red.copy(alpha = 0.7f),
-                            modifier = Modifier.size(14.dp)
-                        )
+                        Column(
+                            modifier = Modifier.padding(vertical = 12.dp, horizontal = 8.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            Text(
+                                text = label,
+                                color = if (isSelected) AccentCyan else Color.White,
+                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                                fontSize = 13.sp
+                            )
+                            Spacer(modifier = Modifier.height(2.dp))
+                            Text(
+                                text = paper.dimensionInches,
+                                color = Color.Gray,
+                                fontSize = 10.sp
+                            )
+                        }
                     }
-                } else if (isSelected) {
-                    Icon(
-                        Icons.Rounded.Check,
-                        contentDescription = null,
-                        tint = AccentCyan,
-                        modifier = Modifier.size(16.dp)
-                    )
                 }
             }
 
-            Spacer(modifier = Modifier.height(4.dp))
+            Spacer(modifier = Modifier.height(18.dp))
 
-            Text(
-                text = "${paperSize.pixelWidth(isLandscape)}×${paperSize.pixelHeight(isLandscape)}px",
-                fontSize = 10.sp,
-                color = Neutral80
-            )
-
-            Spacer(modifier = Modifier.height(8.dp))
-
-            Surface(
-                shape = RoundedCornerShape(8.dp),
-                color = if (isSelected) Blue60 else Navy30
+            // ── 3. Exact Photo Count Layout (6, 12, 18, 24) ──────────────
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    text = when (paperSize.id) {
-                        "paper_4x6" -> "8 Photos (2×4)"
-                        "paper_5x7" -> "12 Photos (3×4)"
-                        "paper_a4" -> "35 Photos (5×7)"
-                        "paper_letter" -> "30 Photos (5×6)"
-                        else -> "${paperSize.widthMm.toInt()}×${paperSize.heightMm.toInt()} mm"
-                    },
-                    fontSize = 10.sp,
-                    fontWeight = FontWeight.SemiBold,
+                    text = "Exact Photo Count per Sheet",
                     color = Color.White,
-                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp)
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 15.sp
+                )
+                Text(
+                    text = "Fixed Grid Matrix",
+                    color = AccentCyan,
+                    fontSize = 11.sp
                 )
             }
-        }
-    }
-}
 
-// ── Sub-Component: Border Color Chip ─────────────────────────────────
+            Spacer(modifier = Modifier.height(10.dp))
 
-@Composable
-private fun BorderColorChip(
-    label: String,
-    color: Int,
-    isSelected: Boolean,
-    onClick: () -> Unit
-) {
-    Surface(
-        shape = RoundedCornerShape(10.dp),
-        color = if (isSelected) Blue60 else Navy25,
-        border = BorderStroke(
-            1.dp,
-            if (isSelected) AccentCyan else Color.White.copy(alpha = 0.15f)
-        ),
-        modifier = Modifier.clickable(onClick = onClick)
-    ) {
-        Row(
-            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Box(
-                modifier = Modifier
-                    .size(12.dp)
-                    .clip(CircleShape)
-                    .background(Color(color))
-                    .border(0.8.dp, Color.White.copy(alpha = 0.6f), CircleShape)
-            )
-            Spacer(modifier = Modifier.width(6.dp))
-            Text(
-                text = label,
-                fontSize = 11.sp,
-                fontWeight = FontWeight.SemiBold,
-                color = Color.White
-            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                listOf(6, 12, 18, 24).forEach { count ->
+                    val isSelected = selectedCount == count
+                    Surface(
+                        modifier = Modifier
+                            .weight(1f)
+                            .clip(RoundedCornerShape(12.dp))
+                            .clickable { viewModel.setPhotoCount(count) }
+                            .border(
+                                width = if (isSelected) 1.5.dp else 1.dp,
+                                color = if (isSelected) AccentCyan else Navy25,
+                                shape = RoundedCornerShape(12.dp)
+                            ),
+                        color = if (isSelected) AccentCyan.copy(alpha = 0.2f) else Navy20
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(vertical = 12.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            Text(
+                                text = "$count",
+                                color = if (isSelected) AccentCyan else Color.White,
+                                fontWeight = FontWeight.Black,
+                                fontSize = 18.sp
+                            )
+                            Text(
+                                text = "Photos",
+                                color = if (isSelected) AccentCyan else Color.LightGray,
+                                fontSize = 10.sp
+                            )
+                        }
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(18.dp))
+
+            // ── 4. Borders & Scissor Cutting Mark Toggles ──────────────────
+            Surface(
+                shape = RoundedCornerShape(14.dp),
+                color = Navy15,
+                border = androidx.compose.foundation.BorderStroke(1.dp, Navy25),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(modifier = Modifier.padding(14.dp)) {
+                    // Borders Switch
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column {
+                            Text("Individual Photo Borders", color = Color.White, fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
+                            Text("Draws clean thin border around each photo", color = Color.Gray, fontSize = 11.sp)
+                        }
+                        Switch(
+                            checked = viewModel.showBorders,
+                            onCheckedChange = { viewModel.toggleBorders() },
+                            colors = SwitchDefaults.colors(
+                                checkedThumbColor = AccentCyan,
+                                checkedTrackColor = AccentCyan.copy(alpha = 0.3f)
+                            )
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    // Scissor Marks Switch
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column {
+                            Text("Scissor Marks & Dashed Cut Lines", color = Color.White, fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
+                            Text("Displays physical ✂ marks and cutting guides", color = Color.Gray, fontSize = 11.sp)
+                        }
+                        Switch(
+                            checked = viewModel.showScissorMarks,
+                            onCheckedChange = { viewModel.toggleScissors() },
+                            colors = SwitchDefaults.colors(
+                                checkedThumbColor = AccentCyan,
+                                checkedTrackColor = AccentCyan.copy(alpha = 0.3f)
+                            )
+                        )
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(24.dp))
         }
     }
 }

@@ -1,46 +1,47 @@
 package com.gemid.photostudio.ui.screens
 
 import android.content.Intent
-import androidx.compose.foundation.BorderStroke
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.CheckCircle
-import androidx.compose.material.icons.rounded.ContentCut
+import androidx.compose.material.icons.rounded.Home
 import androidx.compose.material.icons.rounded.Image
 import androidx.compose.material.icons.rounded.PictureAsPdf
 import androidx.compose.material.icons.rounded.Print
 import androidx.compose.material.icons.rounded.SaveAlt
 import androidx.compose.material.icons.rounded.Share
-import androidx.compose.material.icons.rounded.Straighten
 import androidx.compose.material.icons.rounded.Wifi
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -57,28 +58,33 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
-import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
-import com.gemid.photostudio.export.ExportFormat
+import com.gemid.photostudio.navigation.Screen
 import com.gemid.photostudio.ui.theme.AccentCyan
 import com.gemid.photostudio.ui.theme.AccentTeal
-import com.gemid.photostudio.ui.theme.Blue60
 import com.gemid.photostudio.ui.theme.Navy10
 import com.gemid.photostudio.ui.theme.Navy15
 import com.gemid.photostudio.ui.theme.Navy20
 import com.gemid.photostudio.ui.theme.Navy25
-import com.gemid.photostudio.ui.theme.Neutral80
-import com.gemid.photostudio.ui.theme.Neutral90
 import com.gemid.photostudio.ui.viewmodel.StudioViewModel
 import kotlinx.coroutines.launch
 
+/**
+ * Direct Export & Wi-Fi Print Screen:
+ * Large, clear, high-contrast buttons for:
+ * 1. Direct Wi-Fi Printer connection (WifiPrintHelper / PrintManager)
+ * 2. High-Res 300 DPI JPEG export (with EXIF resolution injection)
+ * 3. PDF export (1:1 physical scale)
+ * 4. Lossless PNG export
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ExportScreen(
@@ -86,17 +92,16 @@ fun ExportScreen(
     viewModel: StudioViewModel
 ) {
     val context = LocalContext.current
-    val uiState by viewModel.uiState.collectAsState()
+    val scope = rememberCoroutineScope()
     val snackbarHostState = remember { SnackbarHostState() }
-    val coroutineScope = rememberCoroutineScope()
+    val masterSheetBitmap by viewModel.masterSheetBitmap.collectAsState()
+    val selectedPaper = viewModel.selectedPaperSize
+    val selectedCount = viewModel.selectedPhotoCount
 
-    val grid = uiState.computedGridResult
-    val sheetBitmap = uiState.generatedSheetBitmap
-
-    // Auto-generate sheet if navigating directly without prior trigger
-    LaunchedEffect(sheetBitmap) {
-        if (sheetBitmap == null && (uiState.activeBitmap != null || viewModel.photoList.isNotEmpty())) {
-            viewModel.generateMasterSheetBitmap()
+    LaunchedEffect(viewModel.statusMessage) {
+        viewModel.statusMessage?.let {
+            snackbarHostState.showSnackbar(it)
+            viewModel.statusMessage = null
         }
     }
 
@@ -105,352 +110,278 @@ fun ExportScreen(
             TopAppBar(
                 title = {
                     Column {
-                        Text("Export & Print Hub", fontWeight = FontWeight.Bold)
-                        Text(
-                            text = "${viewModel.selectedPaperSize.title} • ${grid.sheetWidthPx}×${grid.sheetHeightPx}px @ 300 DPI",
-                            fontSize = 11.sp,
-                            color = AccentCyan
-                        )
+                        Text("Export & Print", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 18.sp)
+                        Text("${selectedPaper.title} • $selectedCount Photos (300 DPI)", color = AccentCyan, fontSize = 11.sp)
                     }
                 },
                 navigationIcon = {
-                    IconButton(onClick = { navController.navigateUp() }) {
-                        Icon(Icons.Rounded.ArrowBack, contentDescription = "Back")
+                    IconButton(onClick = { navController.popBackStack() }) {
+                        Icon(Icons.Rounded.ArrowBack, contentDescription = "Back", tint = Color.White)
                     }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = Color.Transparent
-                )
+                actions = {
+                    IconButton(onClick = {
+                        navController.navigate(Screen.Home.route) {
+                            popUpTo(Screen.Home.route) { inclusive = true }
+                        }
+                    }) {
+                        Icon(Icons.Rounded.Home, contentDescription = "Home", tint = AccentCyan)
+                    }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = Navy10)
             )
         },
-        snackbarHost = { SnackbarHost(snackbarHostState) }
-    ) { innerPadding ->
-        LazyColumn(
+        snackbarHost = { SnackbarHost(snackbarHostState) },
+        containerColor = Navy10
+    ) { padding ->
+        Box(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(innerPadding),
-            contentPadding = PaddingValues(16.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
+                .padding(padding)
         ) {
-            // ── 1. Master Sheet Preview ────────────────────────────
-            item {
-                Text(
-                    text = "300 DPI Print Sheet Preview",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = Neutral90
-                )
-                Spacer(modifier = Modifier.height(8.dp))
-
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = 16.dp, vertical = 8.dp)
+                    .verticalScroll(rememberScrollState()),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                // ── Sheet Preview Thumbnail ───────────────────────────────
                 Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(20.dp),
-                    colors = CardDefaults.cardColors(containerColor = Navy15),
-                    border = BorderStroke(1.5.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.3f))
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(200.dp),
+                    shape = RoundedCornerShape(16.dp),
+                    colors = CardDefaults.cardColors(containerColor = Navy20),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, Navy25)
                 ) {
                     Box(
                         modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(16.dp),
+                            .fillMaxSize()
+                            .padding(10.dp),
                         contentAlignment = Alignment.Center
                     ) {
-                        if (sheetBitmap != null && !sheetBitmap.isRecycled) {
-                            val aspect = grid.paper.aspectRatio(grid.isLandscape)
-                            Box(
+                        if (masterSheetBitmap != null) {
+                            Surface(
                                 modifier = Modifier
-                                    .fillMaxWidth(0.92f)
-                                    .aspectRatio(aspect)
-                                    .shadow(16.dp, RoundedCornerShape(8.dp))
-                                    .clip(RoundedCornerShape(8.dp))
-                                    .background(Color.White)
+                                    .fillMaxSize()
+                                    .clip(RoundedCornerShape(6.dp)),
+                                color = Color.White,
+                                shadowElevation = 6.dp
                             ) {
                                 Image(
-                                    bitmap = sheetBitmap.asImageBitmap(),
-                                    contentDescription = "Master Sheet",
-                                    modifier = Modifier.fillMaxSize(),
-                                    contentScale = ContentScale.Fit
+                                    bitmap = masterSheetBitmap!!.asImageBitmap(),
+                                    contentDescription = "Print Sheet Preview",
+                                    modifier = Modifier.fillMaxSize()
                                 )
                             }
                         } else {
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .aspectRatio(1.4f)
-                                    .clip(RoundedCornerShape(8.dp))
-                                    .background(Navy20),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                    Icon(
-                                        Icons.Rounded.Print,
-                                        contentDescription = null,
-                                        tint = AccentCyan,
-                                        modifier = Modifier.size(40.dp)
-                                    )
-                                    Spacer(modifier = Modifier.height(8.dp))
-                                    Text(
-                                        text = "${grid.paper.dimensionInches} Sheet (${grid.activeCount} photos)",
-                                        fontSize = 12.sp,
-                                        color = Neutral80
-                                    )
-                                }
-                            }
+                            Text("No sheet generated", color = Color.Gray, fontSize = 14.sp)
                         }
                     }
                 }
-            }
 
-            // ── 2. Specifications Summary Card ────────────────────
-            item {
-                Card(
-                    shape = RoundedCornerShape(16.dp),
-                    colors = CardDefaults.cardColors(containerColor = Navy20),
-                    border = BorderStroke(1.dp, Color.White.copy(alpha = 0.1f))
-                ) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(14.dp),
-                        horizontalArrangement = Arrangement.SpaceAround,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        SpecItem(label = "Paper Size", value = viewModel.selectedPaperSize.title)
-                        SpecItem(label = "Photo Count", value = "${grid.activeCount} photos")
-                        SpecItem(label = "DPI Resolution", value = "300 DPI")
-                        SpecItem(label = "Cut Guidelines", value = "✂ & Dashed")
-                    }
-                }
-            }
+                Spacer(modifier = Modifier.height(20.dp))
 
-            // ── 3. Clean, Large Action Buttons ─────────────────────
-            item {
-                Spacer(modifier = Modifier.height(4.dp))
                 Text(
-                    text = "Print & Export Options",
-                    style = MaterialTheme.typography.titleMedium,
+                    text = "Select Export or Print Action",
+                    color = Color.White,
                     fontWeight = FontWeight.Bold,
-                    color = Neutral90
+                    fontSize = 16.sp,
+                    modifier = Modifier.align(Alignment.Start)
                 )
-            }
 
-            // 1. Direct Wi-Fi Minilab Printing
-            item {
-                LargeActionButton(
-                    title = "Direct Wi-Fi Minilab Print",
-                    subtitle = "Epson, Canon SELPHY, HiTi, Mopria & System Spooler",
+                Spacer(modifier = Modifier.height(14.dp))
+
+                // ── 1. Direct Wi-Fi Printer Connection ────────────────────
+                ExportActionCard(
+                    title = "Direct Wi-Fi Print",
+                    subtitle = "Send to Canon SELPHY, Epson, HP or Mopria printer",
+                    badgeText = "RECOMMENDED FOR SHOPS",
                     icon = Icons.Rounded.Print,
-                    badgeText = "DIRECT PRINT",
-                    containerColor = Navy25,
-                    borderColor = AccentTeal,
-                    iconTint = AccentTeal,
+                    accentColor = AccentCyan,
                     onClick = {
                         val printed = viewModel.printSheetDirect(context)
                         if (!printed) {
-                            coroutineScope.launch {
-                                snackbarHostState.showSnackbar("Print service unavailable or no sheet generated.")
+                            scope.launch {
+                                snackbarHostState.showSnackbar("Print service unavailable or no sheet ready")
                             }
                         }
                     }
                 )
-            }
 
-            // 2. High-Res 300 DPI JPEG Export
-            item {
-                LargeActionButton(
+                Spacer(modifier = Modifier.height(12.dp))
+
+                // ── 2. High-Res 300 DPI JPEG Export ───────────────────────
+                ExportActionCard(
                     title = "Save 300 DPI JPEG",
-                    subtitle = "Embedded 300 DPI EXIF headers • Standard minilab lab ready",
-                    icon = Icons.Rounded.SaveAlt,
-                    badgeText = "MAX QUALITY",
-                    containerColor = Blue60,
-                    borderColor = AccentCyan,
-                    iconTint = Color.White,
-                    onClick = {
-                        viewModel.exportSheetImage(
-                            context = context,
-                            format = ExportFormat.JPEG,
-                            onSuccess = { result ->
-                                coroutineScope.launch {
-                                    snackbarHostState.showSnackbar("Saved 300 DPI JPEG (${result.fileName}) to Pictures/GemIDPhotoStudio!")
-                                }
-                            },
-                            onError = { error ->
-                                coroutineScope.launch { snackbarHostState.showSnackbar(error) }
-                            }
-                        )
-                    }
-                )
-            }
-
-            // 3. Lossless PNG Export
-            item {
-                LargeActionButton(
-                    title = "Save Lossless PNG",
-                    subtitle = "Uncompressed 300 DPI pixel-perfect raster copy",
+                    subtitle = "High-resolution photo print format with injected EXIF",
+                    badgeText = "LAB QUALITY",
                     icon = Icons.Rounded.Image,
-                    badgeText = "LOSSLESS",
-                    containerColor = Navy20,
-                    borderColor = Color.White.copy(alpha = 0.2f),
-                    iconTint = AccentCyan,
+                    accentColor = Color(0xFF48CAE4),
                     onClick = {
-                        viewModel.exportSheetImage(
-                            context = context,
-                            format = ExportFormat.PNG,
-                            onSuccess = { result ->
-                                coroutineScope.launch {
-                                    snackbarHostState.showSnackbar("Saved Lossless PNG (${result.fileName}) to Pictures/GemIDPhotoStudio!")
-                                }
-                            },
-                            onError = { error ->
-                                coroutineScope.launch { snackbarHostState.showSnackbar(error) }
+                        viewModel.exportJpeg(context) { fileName ->
+                            scope.launch {
+                                snackbarHostState.showSnackbar("Saved JPEG: $fileName")
                             }
-                        )
+                        }
                     }
                 )
-            }
 
-            // 4. Print-Ready PDF (100% exact physical scale)
-            item {
-                LargeActionButton(
-                    title = "Save Printable PDF",
-                    subtitle = "Exact 1:1 physical millimeter scale document for minilabs",
+                Spacer(modifier = Modifier.height(12.dp))
+
+                // ── 3. 1:1 Scale PDF Document Export ──────────────────────
+                ExportActionCard(
+                    title = "Export 1:1 Scale PDF",
+                    subtitle = "Exact physical millimeter dimensions for document minilabs",
+                    badgeText = "CALIBRATED SCALE",
                     icon = Icons.Rounded.PictureAsPdf,
-                    badgeText = "1:1 SCALE",
-                    containerColor = Navy20,
-                    borderColor = Color(0xFFF59E0B).copy(alpha = 0.6f),
-                    iconTint = Color(0xFFF59E0B),
+                    accentColor = Color(0xFFFF70A6),
                     onClick = {
-                        viewModel.exportSheetPdf(
-                            context = context,
-                            onSuccess = { result ->
-                                coroutineScope.launch {
-                                    snackbarHostState.showSnackbar("Saved 100% Scale PDF (${result.fileName}) to Documents!")
-                                }
-                            },
-                            onError = { error ->
-                                coroutineScope.launch { snackbarHostState.showSnackbar(error) }
+                        viewModel.exportPdf(context) { fileName ->
+                            scope.launch {
+                                snackbarHostState.showSnackbar("Saved PDF: $fileName")
                             }
-                        )
+                        }
                     }
                 )
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                // ── 4. Lossless PNG Export ────────────────────────────────
+                ExportActionCard(
+                    title = "Save Lossless PNG",
+                    subtitle = "Uncompressed digital archival graphics format",
+                    badgeText = "LOSSLESS",
+                    icon = Icons.Rounded.SaveAlt,
+                    accentColor = Color(0xFF70D6FF),
+                    onClick = {
+                        viewModel.exportPng(context) { fileName ->
+                            scope.launch {
+                                snackbarHostState.showSnackbar("Saved PNG: $fileName")
+                            }
+                        }
+                    }
+                )
+
+                Spacer(modifier = Modifier.height(24.dp))
             }
 
-            // 5. Share Print Sheet
-            item {
-                OutlinedButton(
-                    onClick = {
-                        viewModel.exportSheetImage(
-                            context = context,
-                            format = ExportFormat.JPEG,
-                            onSuccess = { result ->
-                                val shareIntent = Intent(Intent.ACTION_SEND).apply {
-                                    type = result.mimeType
-                                    putExtra(Intent.EXTRA_STREAM, result.uri)
-                                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                                }
-                                context.startActivity(Intent.createChooser(shareIntent, "Share High-Res Print Sheet"))
-                            },
-                            onError = { error ->
-                                coroutineScope.launch { snackbarHostState.showSnackbar(error) }
-                            }
-                        )
-                    },
+            // Loading overlay
+            AnimatedVisibility(
+                visible = viewModel.isLoading,
+                enter = fadeIn(),
+                exit = fadeOut()
+            ) {
+                Box(
                     modifier = Modifier
-                        .fillMaxWidth()
-                        .height(52.dp),
-                    shape = RoundedCornerShape(14.dp),
-                    border = BorderStroke(1.5.dp, AccentCyan.copy(alpha = 0.6f))
+                        .fillMaxSize()
+                        .background(Color.Black.copy(alpha = 0.7f)),
+                    contentAlignment = Alignment.Center
                 ) {
-                    Icon(Icons.Rounded.Share, contentDescription = null, tint = AccentCyan, modifier = Modifier.size(20.dp))
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(text = "Share Print Sheet with Client", color = AccentCyan, fontWeight = FontWeight.SemiBold)
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Center
+                    ) {
+                        CircularProgressIndicator(
+                            color = AccentCyan,
+                            strokeWidth = 3.dp,
+                            modifier = Modifier.size(48.dp)
+                        )
+                        Spacer(modifier = Modifier.height(16.dp))
+                        Text(
+                            text = viewModel.loadingMessage,
+                            color = Color.White,
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Medium
+                        )
+                    }
                 }
-
-                Spacer(modifier = Modifier.height(14.dp))
             }
         }
     }
 }
 
 @Composable
-private fun SpecItem(label: String, value: String) {
-    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        Text(text = label, fontSize = 10.sp, color = Neutral80)
-        Spacer(modifier = Modifier.height(2.dp))
-        Text(text = value, fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color.White)
-    }
-}
-
-@Composable
-private fun LargeActionButton(
+private fun ExportActionCard(
     title: String,
     subtitle: String,
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
     badgeText: String,
-    containerColor: Color,
-    borderColor: Color,
-    iconTint: Color,
+    icon: ImageVector,
+    accentColor: Color,
     onClick: () -> Unit
 ) {
-    Card(
-        onClick = onClick,
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(18.dp),
-        colors = CardDefaults.cardColors(containerColor = containerColor),
-        border = BorderStroke(1.5.dp, borderColor)
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(16.dp))
+            .clickable(onClick = onClick)
+            .border(
+                width = 1.dp,
+                color = accentColor.copy(alpha = 0.4f),
+                shape = RoundedCornerShape(16.dp)
+            ),
+        color = Navy15,
+        tonalElevation = 4.dp
     ) {
         Row(
             modifier = Modifier
-                .fillMaxWidth()
+                .fillMaxSize()
                 .padding(16.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Surface(
-                shape = RoundedCornerShape(14.dp),
-                color = iconTint.copy(alpha = 0.2f),
-                border = BorderStroke(1.dp, iconTint.copy(alpha = 0.6f)),
-                modifier = Modifier.size(52.dp)
+            Box(
+                modifier = Modifier
+                    .size(52.dp)
+                    .background(
+                        color = accentColor.copy(alpha = 0.15f),
+                        shape = CircleShape
+                    ),
+                contentAlignment = Alignment.Center
             ) {
-                Box(contentAlignment = Alignment.Center) {
-                    Icon(
-                        imageVector = icon,
-                        contentDescription = null,
-                        tint = iconTint,
-                        modifier = Modifier.size(26.dp)
-                    )
-                }
+                Icon(
+                    imageVector = icon,
+                    contentDescription = title,
+                    tint = accentColor,
+                    modifier = Modifier.size(28.dp)
+                )
             }
 
-            Spacer(modifier = Modifier.width(14.dp))
+            Spacer(modifier = Modifier.width(16.dp))
 
             Column(modifier = Modifier.weight(1f)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
                     Text(
                         text = title,
+                        color = Color.White,
                         fontWeight = FontWeight.Bold,
-                        fontSize = 15.sp,
-                        color = Color.White
+                        fontSize = 16.sp
                     )
-                    Spacer(modifier = Modifier.width(6.dp))
+
                     Surface(
                         shape = RoundedCornerShape(6.dp),
-                        color = iconTint.copy(alpha = 0.25f),
-                        border = BorderStroke(0.8.dp, iconTint)
+                        color = accentColor.copy(alpha = 0.2f)
                     ) {
                         Text(
                             text = badgeText,
-                            fontSize = 8.5.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = iconTint,
-                            modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp)
+                            color = accentColor,
+                            fontSize = 9.sp,
+                            fontWeight = FontWeight.Black,
+                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
                         )
                     }
                 }
-                Spacer(modifier = Modifier.height(3.dp))
+
+                Spacer(modifier = Modifier.height(4.dp))
+
                 Text(
                     text = subtitle,
-                    fontSize = 11.sp,
-                    color = Neutral80,
-                    lineHeight = 15.sp
+                    color = Color.LightGray,
+                    fontSize = 12.sp,
+                    lineHeight = 16.sp
                 )
             }
         }

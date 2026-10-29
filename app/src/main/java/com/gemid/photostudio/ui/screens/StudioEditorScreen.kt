@@ -1,68 +1,47 @@
 package com.gemid.photostudio.ui.screens
 
 import android.graphics.Bitmap
+import android.graphics.Color as AndroidColor
 import android.net.Uri
-import java.io.File
-import androidx.core.content.FileProvider
-import androidx.compose.ui.platform.LocalContext
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.Add
-import androidx.compose.material.icons.rounded.AddAPhoto
-import androidx.compose.material.icons.rounded.ArrowBack
-import androidx.compose.material.icons.rounded.AutoFixHigh
-import androidx.compose.material.icons.rounded.Badge
-import androidx.compose.material.icons.rounded.Brush
-import androidx.compose.material.icons.rounded.CameraAlt
+import androidx.compose.material.icons.rounded.ArrowForward
 import androidx.compose.material.icons.rounded.Check
-import androidx.compose.material.icons.rounded.ColorLens
 import androidx.compose.material.icons.rounded.Crop
-import androidx.compose.material.icons.rounded.Delete
-import androidx.compose.material.icons.rounded.EditCalendar
-import androidx.compose.material.icons.rounded.FormatColorFill
+import androidx.compose.material.icons.rounded.PhotoCamera
 import androidx.compose.material.icons.rounded.PhotoLibrary
-import androidx.compose.material.icons.rounded.Redo
 import androidx.compose.material.icons.rounded.Refresh
-import androidx.compose.material.icons.rounded.RotateRight
-import androidx.compose.material.icons.rounded.Tune
-import androidx.compose.material.icons.rounded.Undo
-import androidx.compose.material.icons.rounded.Wallpaper
+import androidx.compose.material.icons.rounded.Visibility
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
@@ -72,21 +51,17 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Slider
-import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Switch
-import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -97,63 +72,63 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.asImageBitmap
-import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.content.FileProvider
 import androidx.navigation.NavController
-import coil.compose.AsyncImage
-import com.gemid.photostudio.data.model.CustomPhotoSpecDialog
-import com.gemid.photostudio.data.model.PhotoSpec
+import com.gemid.photostudio.data.model.PassportTemplate
 import com.gemid.photostudio.editor.CropCalculator
 import com.gemid.photostudio.editor.CropRatioPreset
-import com.gemid.photostudio.editor.ExamStampConfig
 import com.gemid.photostudio.editor.InteractiveCropper
-import com.gemid.photostudio.editor.StudioBackdrop
-import com.gemid.photostudio.editor.ToneAdjustments
 import com.gemid.photostudio.navigation.Screen
-import com.gemid.photostudio.ui.components.ToolbarButton
 import com.gemid.photostudio.ui.theme.AccentCyan
 import com.gemid.photostudio.ui.theme.AccentTeal
-import com.gemid.photostudio.ui.theme.Blue50
-import com.gemid.photostudio.ui.theme.Blue60
 import com.gemid.photostudio.ui.theme.Navy10
 import com.gemid.photostudio.ui.theme.Navy15
 import com.gemid.photostudio.ui.theme.Navy20
 import com.gemid.photostudio.ui.theme.Navy25
-import com.gemid.photostudio.ui.theme.Navy30
-import com.gemid.photostudio.ui.theme.Neutral80
-import com.gemid.photostudio.ui.theme.Neutral90
 import com.gemid.photostudio.ui.viewmodel.StudioViewModel
+import com.gemid.photostudio.util.ImageUtils
 
+/**
+ * Instant Edit Mode Screen:
+ * - Direct visual feedback of normalized photo.
+ * - Horizontal template selector (Indian Passport, Stamp Size, SSC/UPSC, US Passport) + Custom Pixel Size.
+ * - Offline ML Kit background change (Solid White, Sky Blue, Reset).
+ * - Clean interactive crop / zoom canvas.
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun StudioEditorScreen(
     navController: NavController,
     viewModel: StudioViewModel
 ) {
-    val uiState by viewModel.uiState.collectAsState()
-    var selectedToolIndex by remember { mutableIntStateOf(0) }
+    val context = LocalContext.current
+    val editedBitmap by viewModel.editedBitmap.collectAsState()
+    val isLoading = viewModel.isLoading
     val snackbarHostState = remember { SnackbarHostState() }
 
-    // Cropper State references
-    var currentCropScale by remember { mutableFloatStateOf(1f) }
-    var currentCropOffset by remember { mutableStateOf(Offset.Zero) }
+    var isCropMode by remember { mutableStateOf(false) }
+    var currentScale by remember { mutableFloatStateOf(1f) }
+    var currentPanOffset by remember { mutableStateOf(Offset.Zero) }
     var currentCropRect by remember { mutableStateOf(Rect.Zero) }
     var currentCanvasSize by remember { mutableStateOf(Size.Zero) }
-    var showCustomPhotoSpecDialog by remember { mutableStateOf(false) }
 
-    val context = LocalContext.current
+    var showCustomInput by remember { mutableStateOf(viewModel.isCustomSizeEnabled) }
+    var inputWidth by remember { mutableStateOf(viewModel.customWidthPx) }
+    var inputHeight by remember { mutableStateOf(viewModel.customHeightPx) }
+
     var tempCameraUri by remember { mutableStateOf<Uri?>(null) }
+
     val cameraLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.TakePicture()
-    ) { success: Boolean ->
-        val uri = tempCameraUri
-        if (success && uri != null) {
-            viewModel.loadFromGallery(uri)
+    ) { success ->
+        if (success && tempCameraUri != null) {
+            viewModel.loadPhoto(context, tempCameraUri!!)
         }
     }
 
@@ -161,931 +136,423 @@ fun StudioEditorScreen(
         contract = ActivityResultContracts.PickVisualMedia()
     ) { uri: Uri? ->
         if (uri != null) {
-            viewModel.loadFromGallery(uri)
+            viewModel.loadPhoto(context, uri)
         }
     }
 
-    val onSnapCamera: () -> Unit = {
-        try {
-            val photoFile = File.createTempFile("gemid_studio_cam_", ".jpg", context.cacheDir)
-            val uri = FileProvider.getUriForFile(
-                context,
-                "com.gemid.photostudio.fileprovider",
-                photoFile
-            )
-            tempCameraUri = uri
-            cameraLauncher.launch(uri)
-        } catch (_: Exception) {
-            galleryLauncher.launch(
-                PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
-            )
+    LaunchedEffect(viewModel.statusMessage) {
+        viewModel.statusMessage?.let {
+            snackbarHostState.showSnackbar(it)
+            viewModel.statusMessage = null
         }
     }
-
-    val tools = listOf(
-        "Crop" to Icons.Rounded.Crop,
-        "Backdrop" to Icons.Rounded.Wallpaper,
-        "Tone" to Icons.Rounded.Tune,
-        "Exam Stamp" to Icons.Rounded.Badge,
-        "Rotate" to Icons.Rounded.RotateRight
-    )
 
     Scaffold(
         topBar = {
             TopAppBar(
                 title = {
                     Column {
+                        Text("Edit Photo & Size", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 18.sp)
                         Text(
-                            "Studio Editor",
-                            fontWeight = FontWeight.Bold,
-                            style = MaterialTheme.typography.titleMedium
-                        )
-                        Text(
-                            text = "${uiState.selectedTemplate.title} (${uiState.selectedTemplate.widthMm.toInt()}×${uiState.selectedTemplate.heightMm.toInt()}mm)",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = AccentCyan
+                            text = if (viewModel.isCustomSizeEnabled) "Custom ${viewModel.customWidthPx}×${viewModel.customHeightPx} px"
+                            else viewModel.selectedTemplate.title,
+                            color = AccentCyan,
+                            fontSize = 11.sp
                         )
                     }
                 },
-                navigationIcon = {
-                    IconButton(onClick = { navController.navigateUp() }) {
-                        Icon(Icons.Rounded.ArrowBack, contentDescription = "Back")
-                    }
-                },
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = Navy10),
                 actions = {
-                    // Undo
-                    IconButton(
-                        onClick = { viewModel.undo() },
-                        enabled = uiState.canUndo
-                    ) {
-                        Icon(
-                            Icons.Rounded.Undo,
-                            contentDescription = "Undo",
-                            tint = if (uiState.canUndo) AccentCyan else Color.White.copy(alpha = 0.3f)
-                        )
-                    }
-
-                    // Redo
-                    IconButton(
-                        onClick = { viewModel.redo() },
-                        enabled = uiState.canRedo
-                    ) {
-                        Icon(
-                            Icons.Rounded.Redo,
-                            contentDescription = "Redo",
-                            tint = if (uiState.canRedo) AccentCyan else Color.White.copy(alpha = 0.3f)
-                        )
-                    }
-
-                    Spacer(modifier = Modifier.width(4.dp))
-
-                    // Next / Sheet Hub
-                    FilledTonalButton(
+                    Button(
                         onClick = {
-                            if (!uiState.toneAdjustments.isDefault) {
-                                viewModel.bakeToneAdjustments()
+                            if (editedBitmap != null) {
+                                viewModel.generateMasterSheet()
+                                navController.navigate(Screen.SheetLayout.route)
                             }
-                            if (uiState.examStampConfig.isEnabled) {
-                                viewModel.applyExamStamp()
-                            }
-                            val currentBmp = uiState.activeBitmap
-                            if (currentBmp != null && viewModel.photoList.isEmpty()) {
-                                viewModel.addPhotoToQueue(currentBmp)
-                            }
-                            viewModel.generateMasterSheetBitmap()
-                            navController.navigate(Screen.SheetLayout.route)
                         },
-                        colors = ButtonDefaults.filledTonalButtonColors(
-                            containerColor = MaterialTheme.colorScheme.primary,
-                            contentColor = Color.White
-                        ),
-                        shape = RoundedCornerShape(12.dp),
-                        contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp)
+                        enabled = editedBitmap != null,
+                        colors = ButtonDefaults.buttonColors(containerColor = AccentCyan),
+                        shape = RoundedCornerShape(12.dp)
                     ) {
-                        Icon(
-                            Icons.Rounded.Check,
-                            contentDescription = null,
-                            modifier = Modifier.size(18.dp)
-                        )
+                        Text("Next: Sheet", color = Navy10, fontWeight = FontWeight.Bold)
                         Spacer(modifier = Modifier.width(4.dp))
-                        Text("Next", fontWeight = FontWeight.SemiBold)
+                        Icon(
+                            imageVector = Icons.Rounded.ArrowForward,
+                            contentDescription = "Next",
+                            tint = Navy10,
+                            modifier = Modifier.size(16.dp)
+                        )
                     }
-                    Spacer(modifier = Modifier.width(8.dp))
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = Color.Transparent
-                )
+                }
             )
         },
-        snackbarHost = { SnackbarHost(snackbarHostState) }
-    ) { innerPadding ->
+        snackbarHost = { SnackbarHost(snackbarHostState) },
+        containerColor = Navy10
+    ) { padding ->
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(innerPadding)
+                .padding(padding)
+                .padding(horizontal = 16.dp, vertical = 8.dp)
+                .verticalScroll(rememberScrollState()),
+            horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            val activeBitmap = uiState.activeBitmap
-
-            // ── Canvas / Interactive Workspace ──────────────────────
+            // ── 1. Image Preview & Interactive Cropper Canvas ─────────────
             Box(
                 modifier = Modifier
-                    .weight(1f)
                     .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 8.dp)
-                    .clip(RoundedCornerShape(20.dp))
-                    .background(Navy15)
-                    .border(
-                        width = 1.5.dp,
-                        color = MaterialTheme.colorScheme.outline.copy(alpha = 0.25f),
-                        shape = RoundedCornerShape(20.dp)
-                    ),
+                    .height(340.dp)
+                    .clip(RoundedCornerShape(16.dp))
+                    .background(Navy20)
+                    .border(1.dp, Navy25, RoundedCornerShape(16.dp)),
                 contentAlignment = Alignment.Center
             ) {
-                if (activeBitmap != null && !activeBitmap.isRecycled) {
-                    if (selectedToolIndex == 0) {
-                        // 1. Interactive Cropper View (Pinch-to-zoom & pan)
+                if (isLoading) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        CircularProgressIndicator(color = AccentCyan)
+                        Spacer(modifier = Modifier.height(12.dp))
+                        Text(viewModel.loadingMessage, color = Color.White, fontSize = 12.sp)
+                    }
+                } else if (editedBitmap != null) {
+                    if (isCropMode) {
+                        // Interactive Cropper Canvas
                         InteractiveCropper(
-                            bitmap = activeBitmap,
-                            cropPreset = uiState.cropPreset,
+                            bitmap = editedBitmap!!,
+                            cropPreset = CropRatioPreset.fromPhotoSpec(viewModel.getActivePhotoSpec()),
                             modifier = Modifier.fillMaxSize(),
                             onTransformChange = { scale, offset, rect, size ->
-                                currentCropScale = scale
-                                currentCropOffset = offset
+                                currentScale = scale
+                                currentPanOffset = offset
                                 currentCropRect = rect
                                 currentCanvasSize = size
                             }
                         )
-                    } else {
-                        // 2. Standard Studio Canvas with Live Tone Filter & Stamp Preview
-                        val toneMatrix = remember(uiState.toneAdjustments) {
-                            uiState.toneAdjustments.toComposeColorMatrix()
-                        }
 
-                        Box(
-                            modifier = Modifier
-                                .fillMaxSize(0.92f)
-                                .aspectRatio(uiState.selectedTemplate.aspectRatio)
-                                .clip(RoundedCornerShape(12.dp))
-                                .background(Color.White)
-                                .border(2.dp, AccentCyan, RoundedCornerShape(12.dp)),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Image(
-                                bitmap = activeBitmap.asImageBitmap(),
-                                contentDescription = "Studio Photo Canvas",
-                                modifier = Modifier.fillMaxSize(),
-                                contentScale = ContentScale.Crop,
-                                colorFilter = if (uiState.toneAdjustments.isDefault) null else ColorFilter.colorMatrix(toneMatrix)
-                            )
-
-                            // Live Exam Stamp Overlay preview
-                            if (uiState.examStampConfig.isEnabled) {
-                                Box(
-                                    modifier = Modifier
-                                        .align(Alignment.BottomCenter)
-                                        .fillMaxWidth()
-                                        .background(
-                                            if (uiState.examStampConfig.isDarkBanner) Color.Black.copy(alpha = 0.82f)
-                                            else Color.White.copy(alpha = 0.94f)
-                                        )
-                                        .padding(vertical = 6.dp, horizontal = 8.dp)
-                                ) {
-                                    Column(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        horizontalAlignment = Alignment.CenterHorizontally
-                                    ) {
-                                        val textColor = if (uiState.examStampConfig.isDarkBanner) Color.White else Color.Black
-                                        if (uiState.examStampConfig.candidateName.isNotBlank()) {
-                                            Text(
-                                                text = "NAME: ${uiState.examStampConfig.candidateName.uppercase()}",
-                                                color = textColor,
-                                                fontSize = 11.sp,
-                                                fontWeight = FontWeight.Bold
-                                            )
-                                        }
-                                        if (uiState.examStampConfig.photoDate.isNotBlank()) {
-                                            Text(
-                                                text = "DOP: ${uiState.examStampConfig.photoDate.uppercase()}",
-                                                color = textColor,
-                                                fontSize = 10.sp,
-                                                fontWeight = FontWeight.SemiBold
-                                            )
-                                        }
-                                    }
-                                }
-                            }
-
-                            // Top-left resolution badge
-                            Surface(
-                                shape = RoundedCornerShape(8.dp),
-                                color = Navy10.copy(alpha = 0.85f),
-                                modifier = Modifier
-                                    .align(Alignment.TopStart)
-                                    .padding(8.dp)
-                            ) {
-                                Text(
-                                    text = "${uiState.photoWidth}×${uiState.photoHeight}px",
-                                    fontSize = 10.sp,
-                                    color = Neutral90,
-                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp)
-                                )
-                            }
-                        }
-
-                        // Floating quick replace / retake buttons
+                        // Floating Crop Confirmation Bar
                         Row(
                             modifier = Modifier
-                                .align(Alignment.BottomEnd)
-                                .padding(14.dp),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                .align(Alignment.BottomCenter)
+                                .padding(12.dp),
+                            horizontalArrangement = Arrangement.spacedBy(10.dp)
                         ) {
-                            Surface(
-                                shape = CircleShape,
-                                color = Navy10.copy(alpha = 0.9f),
-                                border = BorderStroke(1.dp, AccentCyan.copy(alpha = 0.5f)),
-                                modifier = Modifier.clickable { onSnapCamera() }
+                            Button(
+                                onClick = {
+                                    if (currentCropRect.width > 0 && currentCropRect.height > 0) {
+                                        val cropped = CropCalculator.performCrop(
+                                            source = editedBitmap!!,
+                                            cropRect = currentCropRect,
+                                            canvasSize = currentCanvasSize,
+                                            scale = currentScale,
+                                            panOffset = currentPanOffset
+                                        )
+                                        viewModel.applyCroppedBitmap(cropped)
+                                    }
+                                    isCropMode = false
+                                },
+                                colors = ButtonDefaults.buttonColors(containerColor = AccentTeal),
+                                shape = RoundedCornerShape(20.dp)
                             ) {
-                                Icon(
-                                    Icons.Rounded.CameraAlt,
-                                    contentDescription = "Retake",
-                                    tint = AccentCyan,
-                                    modifier = Modifier.padding(10.dp).size(20.dp)
-                                )
+                                Icon(Icons.Rounded.Check, contentDescription = "Apply", tint = Color.Black, modifier = Modifier.size(16.dp))
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text("Apply Crop", color = Color.Black, fontWeight = FontWeight.Bold, fontSize = 12.sp)
                             }
-                            Surface(
-                                shape = CircleShape,
-                                color = Navy10.copy(alpha = 0.9f),
-                                border = BorderStroke(1.dp, AccentCyan.copy(alpha = 0.5f)),
-                                modifier = Modifier.clickable {
-                                    galleryLauncher.launch(
-                                        PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
-                                    )
-                                }
+
+                            OutlinedButton(
+                                onClick = { isCropMode = false },
+                                colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.White),
+                                shape = RoundedCornerShape(20.dp)
                             ) {
-                                Icon(
-                                    Icons.Rounded.PhotoLibrary,
-                                    contentDescription = "Gallery",
-                                    tint = AccentCyan,
-                                    modifier = Modifier.padding(10.dp).size(20.dp)
-                                )
+                                Text("Cancel", fontSize = 12.sp)
+                            }
+                        }
+                    } else {
+                        // Clean Preview Mode
+                        Image(
+                            bitmap = editedBitmap!!.asImageBitmap(),
+                            contentDescription = "Selected Photo",
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(12.dp)
+                        )
+
+                        // Toggle Crop Button
+                        Surface(
+                            shape = CircleShape,
+                            color = Navy10.copy(alpha = 0.85f),
+                            border = androidx.compose.foundation.BorderStroke(1.dp, AccentCyan.copy(alpha = 0.6f)),
+                            modifier = Modifier
+                                .align(Alignment.BottomEnd)
+                                .padding(12.dp)
+                                .clickable { isCropMode = true }
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(Icons.Rounded.Crop, contentDescription = "Crop", tint = AccentCyan, modifier = Modifier.size(18.dp))
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text("Crop / Align", color = AccentCyan, fontSize = 12.sp, fontWeight = FontWeight.Bold)
                             }
                         }
                     }
                 } else {
-                    // Empty state
+                    // Empty state: Quick Camera/Gallery pick buttons
                     Column(
                         horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.Center,
-                        modifier = Modifier.padding(24.dp)
+                        verticalArrangement = Arrangement.Center
                     ) {
-                        Box(
-                            modifier = Modifier
-                                .size(72.dp)
-                                .clip(CircleShape)
-                                .background(Navy25)
-                                .border(1.5.dp, AccentCyan.copy(alpha = 0.4f), CircleShape),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                Icons.Rounded.AddAPhoto,
-                                contentDescription = null,
-                                modifier = Modifier.size(36.dp),
-                                tint = AccentCyan
-                            )
-                        }
-
-                        Spacer(modifier = Modifier.height(16.dp))
-
-                        Text(
-                            text = "No Photo Loaded",
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold,
-                            color = Neutral90
-                        )
-
-                        Spacer(modifier = Modifier.height(6.dp))
-
-                        Text(
-                            text = "Snap a photo with camera guide\nor import a portrait from your device",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = Neutral80.copy(alpha = 0.7f),
-                            textAlign = TextAlign.Center
-                        )
-
-                        Spacer(modifier = Modifier.height(20.dp))
-
-                        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        Text("No photo loaded", color = Color.Gray, fontSize = 14.sp)
+                        Spacer(modifier = Modifier.height(14.dp))
+                        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                             Button(
-                                onClick = { onSnapCamera() },
-                                colors = ButtonDefaults.buttonColors(containerColor = Blue60),
-                                shape = RoundedCornerShape(12.dp)
-                            ) {
-                                Icon(Icons.Rounded.CameraAlt, contentDescription = null, modifier = Modifier.size(18.dp))
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Text("Take Photo", fontWeight = FontWeight.Bold)
-                            }
-
-                            OutlinedButton(
                                 onClick = {
-                                    galleryLauncher.launch(
-                                        PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
-                                    )
+                                    val file = ImageUtils.createCaptureFile(context)
+                                    val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
+                                    tempCameraUri = uri
+                                    cameraLauncher.launch(uri)
                                 },
-                                shape = RoundedCornerShape(12.dp),
-                                colors = ButtonDefaults.outlinedButtonColors(contentColor = AccentCyan)
+                                colors = ButtonDefaults.buttonColors(containerColor = AccentCyan),
+                                shape = RoundedCornerShape(10.dp)
                             ) {
-                                Icon(Icons.Rounded.PhotoLibrary, contentDescription = null, modifier = Modifier.size(18.dp))
+                                Icon(Icons.Rounded.PhotoCamera, contentDescription = "Camera", tint = Navy10, modifier = Modifier.size(18.dp))
                                 Spacer(modifier = Modifier.width(6.dp))
-                                Text("From Gallery")
+                                Text("Camera", color = Navy10, fontWeight = FontWeight.Bold)
                             }
-                        }
-                    }
-                }
-            }
 
-            // ── Tool Adjustment Panels ──────────────────────────────
-            Card(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp),
-                shape = RoundedCornerShape(20.dp),
-                colors = CardDefaults.cardColors(containerColor = Navy20)
-            ) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 12.dp)
-                ) {
-                    when (selectedToolIndex) {
-                        0 -> {
-                            // ── 1. Interactive Cropper Controls ──────
-                            CropperControlsPanel(
-                                activeBitmap = activeBitmap,
-                                selectedPreset = uiState.cropPreset,
-                                customSpecs = viewModel.getAllPhotoSpecs(),
-                                onSelectPreset = { viewModel.setCropPreset(it) },
-                                onOpenCustomSpecDialog = { showCustomPhotoSpecDialog = true },
-                                onDeleteCustomSpec = { viewModel.deleteCustomPhotoSpec(it) },
-                                onApplyCrop = {
-                                    if (activeBitmap != null && currentCanvasSize.width > 0f) {
-                                        val cropped = CropCalculator.performCrop(
-                                            source = activeBitmap,
-                                            cropRect = currentCropRect,
-                                            canvasSize = currentCanvasSize,
-                                            scale = currentCropScale,
-                                            panOffset = currentCropOffset
-                                        )
-                                        viewModel.applyCroppedBitmap(cropped)
-                                    }
-                                }
-                            )
-                        }
-
-                        1 -> {
-                            // ── 2. Background Replacement Engine ─────
-                            BackdropControlsPanel(
-                                currentBackdrop = uiState.currentBackdrop,
-                                onSelectBackdrop = { viewModel.replaceBackground(it) }
-                            )
-                        }
-
-                        2 -> {
-                            // ── 3. Tone & Color Adjustments ──────────
-                            ToneControlsPanel(
-                                adjustments = uiState.toneAdjustments,
-                                onUpdate = { viewModel.updateToneAdjustments(it) },
-                                onReset = { viewModel.resetToneAdjustments() },
-                                onBake = { viewModel.bakeToneAdjustments() }
-                            )
-                        }
-
-                        3 -> {
-                            // ── 4. Indian Exam Name & Date Banner ────
-                            ExamStampControlsPanel(
-                                config = uiState.examStampConfig,
-                                onUpdate = { viewModel.updateExamStampConfig(it) },
-                                onApply = { viewModel.applyExamStamp() }
-                            )
-                        }
-
-                        4 -> {
-                            // ── 5. Rotation ──────────────────────────
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
+                            Button(
+                                onClick = {
+                                    galleryLauncher.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+                                },
+                                colors = ButtonDefaults.buttonColors(containerColor = Navy25),
+                                shape = RoundedCornerShape(10.dp)
                             ) {
-                                Column {
-                                    Text(
-                                        text = "Orientation & Rotation",
-                                        style = MaterialTheme.typography.titleSmall,
-                                        fontWeight = FontWeight.Bold,
-                                        color = AccentCyan
-                                    )
-                                    Text(
-                                        text = "Current angle: ${uiState.rotationAngle}°",
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = Neutral80
-                                    )
-                                }
-                                Button(
-                                    onClick = { viewModel.rotatePhotoClockwise() },
-                                    colors = ButtonDefaults.buttonColors(containerColor = Blue60),
-                                    shape = RoundedCornerShape(10.dp),
-                                    enabled = activeBitmap != null
-                                ) {
-                                    Icon(Icons.Rounded.RotateRight, contentDescription = null, modifier = Modifier.size(16.dp))
-                                    Spacer(modifier = Modifier.width(4.dp))
-                                    Text("+90°", fontWeight = FontWeight.Bold)
-                                }
+                                Icon(Icons.Rounded.PhotoLibrary, contentDescription = "Gallery", tint = Color.White, modifier = Modifier.size(18.dp))
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text("Gallery", color = Color.White)
                             }
                         }
                     }
                 }
             }
 
-            Spacer(modifier = Modifier.height(6.dp))
+            Spacer(modifier = Modifier.height(16.dp))
 
-            // ── Bottom Navigation Toolbar ───────────────────────────
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 8.dp, vertical = 6.dp),
-                horizontalArrangement = Arrangement.SpaceEvenly
-            ) {
-                tools.forEachIndexed { index, (label, icon) ->
-                    ToolbarButton(
-                        label = label,
-                        icon = icon,
-                        isSelected = selectedToolIndex == index,
-                        onClick = { selectedToolIndex = index }
-                    )
-                }
-            }
-
-            Spacer(modifier = Modifier.height(6.dp))
-        }
-
-        // Loading indicator dialog
-        AnimatedVisibility(
-            visible = uiState.isLoading,
-            enter = fadeIn(),
-            exit = fadeOut()
-        ) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(Color.Black.copy(alpha = 0.65f)),
-                contentAlignment = Alignment.Center
-            ) {
-                Card(
-                    shape = RoundedCornerShape(20.dp),
-                    colors = CardDefaults.cardColors(containerColor = Navy20)
-                ) {
-                    Column(
-                        modifier = Modifier.padding(28.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        CircularProgressIndicator(color = Blue60)
-                        Spacer(modifier = Modifier.height(16.dp))
-                        Text(
-                            text = uiState.loadingMessage.ifEmpty { "Processing..." },
-                            color = Neutral90,
-                            fontWeight = FontWeight.Medium,
-                            fontSize = 14.sp
-                        )
-                    }
-                }
-            }
-        }
-
-        if (showCustomPhotoSpecDialog) {
-            CustomPhotoSpecDialog(
-                onDismissRequest = { showCustomPhotoSpecDialog = false },
-                onConfirm = { newSpec ->
-                    viewModel.addCustomPhotoSpec(newSpec)
-                    showCustomPhotoSpecDialog = false
-                }
-            )
-        }
-    }
-}
-
-// ── Sub-Panels for Editing Suite ─────────────────────────────────────
-
-@Composable
-private fun CropperControlsPanel(
-    activeBitmap: Bitmap?,
-    selectedPreset: CropRatioPreset,
-    customSpecs: List<PhotoSpec>,
-    onSelectPreset: (CropRatioPreset) -> Unit,
-    onOpenCustomSpecDialog: () -> Unit,
-    onDeleteCustomSpec: (PhotoSpec) -> Unit,
-    onApplyCrop: () -> Unit
-) {
-    Column {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(
-                text = "Crop Format",
-                style = MaterialTheme.typography.titleSmall,
-                fontWeight = FontWeight.Bold,
-                color = AccentCyan
-            )
-
-            Button(
-                onClick = onApplyCrop,
-                colors = ButtonDefaults.buttonColors(containerColor = Blue60),
-                shape = RoundedCornerShape(10.dp),
-                contentPadding = PaddingValues(horizontal = 14.dp, vertical = 4.dp),
-                enabled = activeBitmap != null
-            ) {
-                Icon(Icons.Rounded.Crop, contentDescription = null, modifier = Modifier.size(16.dp))
-                Spacer(modifier = Modifier.width(4.dp))
-                Text("Apply Crop", fontWeight = FontWeight.Bold, fontSize = 12.sp)
-            }
-        }
-
-        Spacer(modifier = Modifier.height(6.dp))
-
-        LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            items(CropRatioPreset.entries.toTypedArray()) { preset ->
-                val isSelected = selectedPreset.title == preset.title
-                Surface(
-                    shape = RoundedCornerShape(10.dp),
-                    color = if (isSelected) Blue60 else Navy25,
-                    border = BorderStroke(1.dp, if (isSelected) AccentCyan else Color.White.copy(alpha = 0.15f)),
-                    modifier = Modifier.clickable { onSelectPreset(preset) }
-                ) {
-                    Text(
-                        text = "${preset.title} (${preset.dimensionsLabel})",
-                        fontSize = 11.sp,
-                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                        color = if (isSelected) Color.White else Neutral80,
-                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
-                    )
-                }
-            }
-
-            // Custom photo specs created by user
-            items(customSpecs.filter { it.isCustom }) { spec ->
-                val specPreset = CropRatioPreset.fromPhotoSpec(spec)
-                val isSelected = selectedPreset.title == specPreset.title
-                Surface(
-                    shape = RoundedCornerShape(10.dp),
-                    color = if (isSelected) Blue60 else Navy25,
-                    border = BorderStroke(1.dp, if (isSelected) AccentCyan else Color.White.copy(alpha = 0.15f)),
-                    modifier = Modifier.clickable { onSelectPreset(specPreset) }
-                ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = "${spec.title} (${spec.dimensionMmLabel})",
-                            fontSize = 11.sp,
-                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                            color = if (isSelected) Color.White else Neutral80
-                        )
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Icon(
-                            Icons.Rounded.Delete,
-                            contentDescription = "Delete custom template",
-                            tint = Color.Red.copy(alpha = 0.8f),
-                            modifier = Modifier
-                                .size(14.dp)
-                                .clickable { onDeleteCustomSpec(spec) }
-                        )
-                    }
-                }
-            }
-
-            // "+ Custom Size" button
-            item {
-                Surface(
-                    shape = RoundedCornerShape(10.dp),
-                    color = Navy15,
-                    border = BorderStroke(1.dp, AccentCyan.copy(alpha = 0.5f)),
-                    modifier = Modifier.clickable(onClick = onOpenCustomSpecDialog)
-                ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(
-                            Icons.Rounded.Add,
-                            contentDescription = null,
-                            tint = AccentCyan,
-                            modifier = Modifier.size(14.dp)
-                        )
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text(
-                            text = "+ Custom Size",
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = AccentCyan
-                        )
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun BackdropControlsPanel(
-    currentBackdrop: StudioBackdrop,
-    onSelectBackdrop: (StudioBackdrop) -> Unit
-) {
-    Column {
-        Text(
-            text = "Instant Background Replacement",
-            style = MaterialTheme.typography.titleSmall,
-            fontWeight = FontWeight.Bold,
-            color = AccentCyan
-        )
-        Text(
-            text = "Offline AI portrait segmentation with solid studio backdrops",
-            style = MaterialTheme.typography.bodySmall,
-            color = Neutral80
-        )
-
-        Spacer(modifier = Modifier.height(8.dp))
-
-        LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            items(StudioBackdrop.entries.toTypedArray()) { backdrop ->
-                val isSelected = currentBackdrop == backdrop
-                Surface(
-                    shape = RoundedCornerShape(12.dp),
-                    color = if (isSelected) Blue60 else Navy25,
-                    border = BorderStroke(
-                        1.dp,
-                        if (isSelected) AccentCyan else Color.White.copy(alpha = 0.15f)
-                    ),
-                    modifier = Modifier.clickable { onSelectBackdrop(backdrop) }
-                ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        if (backdrop != StudioBackdrop.ORIGINAL && backdrop != StudioBackdrop.TRANSPARENT) {
-                            Box(
-                                modifier = Modifier
-                                    .size(14.dp)
-                                    .clip(CircleShape)
-                                    .background(Color(backdrop.colorArgb))
-                                    .border(1.dp, Color.Gray, CircleShape)
-                            )
-                            Spacer(modifier = Modifier.width(6.dp))
-                        }
-                        Text(
-                            text = backdrop.title,
-                            fontSize = 12.sp,
-                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                            color = if (isSelected) Color.White else Neutral80
-                        )
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun ToneControlsPanel(
-    adjustments: ToneAdjustments,
-    onUpdate: (ToneAdjustments) -> Unit,
-    onReset: () -> Unit,
-    onBake: () -> Unit
-) {
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(180.dp)
-            .verticalScroll(rememberScrollState())
-    ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(
-                text = "Color & Tone Adjustments",
-                style = MaterialTheme.typography.titleSmall,
-                fontWeight = FontWeight.Bold,
-                color = AccentCyan
-            )
-
-            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                IconButton(onClick = onReset, modifier = Modifier.size(32.dp)) {
-                    Icon(Icons.Rounded.Refresh, contentDescription = "Reset", tint = Neutral80)
-                }
-                FilledTonalButton(
-                    onClick = onBake,
-                    colors = ButtonDefaults.filledTonalButtonColors(containerColor = Blue50),
-                    shape = RoundedCornerShape(8.dp),
-                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 2.dp)
-                ) {
-                    Text("Bake", fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                }
-            }
-        }
-
-        // Exposure Slider
-        ToneSliderRow(
-            label = "Exposure",
-            value = adjustments.exposure,
-            range = -1.0f..1.0f,
-            valueFormat = "%.2f",
-            onValueChange = { onUpdate(adjustments.copy(exposure = it)) }
-        )
-
-        // Brightness Slider
-        ToneSliderRow(
-            label = "Brightness",
-            value = adjustments.brightness,
-            range = -60.0f..60.0f,
-            valueFormat = "%.0f",
-            onValueChange = { onUpdate(adjustments.copy(brightness = it)) }
-        )
-
-        // Contrast Slider
-        ToneSliderRow(
-            label = "Contrast",
-            value = adjustments.contrast,
-            range = 0.6f..1.8f,
-            valueFormat = "%.2f",
-            onValueChange = { onUpdate(adjustments.copy(contrast = it)) }
-        )
-
-        // Saturation Slider
-        ToneSliderRow(
-            label = "Saturation",
-            value = adjustments.saturation,
-            range = 0.0f..2.0f,
-            valueFormat = "%.2f",
-            onValueChange = { onUpdate(adjustments.copy(saturation = it)) }
-        )
-
-        // Warmth / Temperature Slider
-        ToneSliderRow(
-            label = "Warmth",
-            value = adjustments.warmth,
-            range = -40.0f..40.0f,
-            valueFormat = "%.0f",
-            onValueChange = { onUpdate(adjustments.copy(warmth = it)) }
-        )
-    }
-}
-
-@Composable
-private fun ToneSliderRow(
-    label: String,
-    value: Float,
-    range: ClosedFloatingPointRange<Float>,
-    valueFormat: String,
-    onValueChange: (Float) -> Unit
-) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Text(
-            text = label,
-            fontSize = 11.sp,
-            color = Neutral80,
-            modifier = Modifier.width(72.dp)
-        )
-        Slider(
-            value = value,
-            onValueChange = onValueChange,
-            valueRange = range,
-            modifier = Modifier.weight(1f),
-            colors = SliderDefaults.colors(
-                thumbColor = AccentCyan,
-                activeTrackColor = Blue50,
-                inactiveTrackColor = Navy30
-            )
-        )
-        Text(
-            text = String.format(valueFormat, value),
-            fontSize = 11.sp,
-            color = Neutral90,
-            modifier = Modifier.width(36.dp),
-            textAlign = TextAlign.End
-        )
-    }
-}
-
-@Composable
-private fun ExamStampControlsPanel(
-    config: ExamStampConfig,
-    onUpdate: (ExamStampConfig) -> Unit,
-    onApply: () -> Unit
-) {
-    Column {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Column {
-                Text(
-                    text = "Indian Exam Name & Date Banner",
-                    style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.Bold,
-                    color = AccentCyan
-                )
-                Text(
-                    text = "SSC / UPSC official bottom strip",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = Neutral80
-                )
-            }
-
-            Switch(
-                checked = config.isEnabled,
-                onCheckedChange = { onUpdate(config.copy(isEnabled = it)) },
-                colors = SwitchDefaults.colors(
-                    checkedThumbColor = Color.White,
-                    checkedTrackColor = Blue60
-                )
-            )
-        }
-
-        if (config.isEnabled) {
-            Spacer(modifier = Modifier.height(8.dp))
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                OutlinedTextField(
-                    value = config.candidateName,
-                    onValueChange = { onUpdate(config.copy(candidateName = it)) },
-                    label = { Text("Candidate Name", fontSize = 11.sp) },
-                    placeholder = { Text("e.g. RAHUL SHARMA", fontSize = 11.sp) },
-                    singleLine = true,
-                    modifier = Modifier.weight(1.2f),
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = AccentCyan,
-                        unfocusedBorderColor = Neutral80.copy(alpha = 0.3f)
-                    )
-                )
-
-                OutlinedTextField(
-                    value = config.photoDate,
-                    onValueChange = { onUpdate(config.copy(photoDate = it)) },
-                    label = { Text("Date of Photo", fontSize = 11.sp) },
-                    placeholder = { Text("DD/MM/YYYY", fontSize = 11.sp) },
-                    singleLine = true,
-                    modifier = Modifier.weight(0.9f),
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = AccentCyan,
-                        unfocusedBorderColor = Neutral80.copy(alpha = 0.3f)
-                    )
-                )
-            }
-
-            Spacer(modifier = Modifier.height(8.dp))
-
+            // ── 2. Standard Template & Custom Pixel Size Selector ────────
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.clickable {
-                        onUpdate(config.copy(isDarkBanner = !config.isDarkBanner))
-                    }
-                ) {
-                    Surface(
-                        shape = RoundedCornerShape(6.dp),
-                        color = if (config.isDarkBanner) Color.Black else Color.White,
-                        border = BorderStroke(1.dp, Color.Gray),
-                        modifier = Modifier.size(18.dp)
-                    ) {}
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text(
-                        text = if (config.isDarkBanner) "Black Strip (White text)" else "White Strip (Black text)",
-                        fontSize = 11.sp,
-                        color = Neutral90
+                Text(
+                    text = "Choose Size / Template",
+                    color = Color.White,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 15.sp
+                )
+                Text(
+                    text = "300 DPI Standard",
+                    color = AccentCyan,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Medium
+                )
+            }
+
+            Spacer(modifier = Modifier.height(10.dp))
+
+            // Horizontal Template Chips
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                val templates = listOf(
+                    PassportTemplate.INDIAN_PASSPORT,
+                    PassportTemplate.STAMP_SIZE,
+                    PassportTemplate.SSC_UPSC_EXAM,
+                    PassportTemplate.US_PASSPORT
+                )
+
+                templates.forEach { template ->
+                    val isSelected = viewModel.selectedTemplate == template && !viewModel.isCustomSizeEnabled
+                    FilterChip(
+                        selected = isSelected,
+                        onClick = {
+                            showCustomInput = false
+                            viewModel.setTemplate(template)
+                        },
+                        label = {
+                            Text(
+                                text = when (template) {
+                                    PassportTemplate.INDIAN_PASSPORT -> "Indian Passport (35×45mm)"
+                                    PassportTemplate.STAMP_SIZE -> "Stamp Size (20×25mm)"
+                                    PassportTemplate.SSC_UPSC_EXAM -> "SSC / UPSC (35×45mm)"
+                                    PassportTemplate.US_PASSPORT -> "US Passport (2×2\")"
+                                    else -> template.title
+                                },
+                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
+                            )
+                        },
+                        colors = FilterChipDefaults.filterChipColors(
+                            containerColor = Navy15,
+                            labelColor = Color.LightGray,
+                            selectedContainerColor = AccentCyan,
+                            selectedLabelColor = Navy10
+                        ),
+                        border = FilterChipDefaults.filterChipBorder(
+                            enabled = true,
+                            selected = isSelected,
+                            borderColor = Navy25,
+                            selectedBorderColor = AccentCyan
+                        )
                     )
                 }
 
-                Button(
-                    onClick = onApply,
-                    colors = ButtonDefaults.buttonColors(containerColor = Blue60),
-                    shape = RoundedCornerShape(10.dp),
-                    contentPadding = PaddingValues(horizontal = 14.dp, vertical = 4.dp)
+                // Custom Size Chip
+                FilterChip(
+                    selected = viewModel.isCustomSizeEnabled || showCustomInput,
+                    onClick = {
+                        showCustomInput = true
+                    },
+                    label = {
+                        Text(
+                            text = "Custom Px Size",
+                            fontWeight = if (viewModel.isCustomSizeEnabled) FontWeight.Bold else FontWeight.Normal
+                        )
+                    },
+                    colors = FilterChipDefaults.filterChipColors(
+                        containerColor = Navy15,
+                        labelColor = Color.LightGray,
+                        selectedContainerColor = AccentCyan,
+                        selectedLabelColor = Navy10
+                    ),
+                    border = FilterChipDefaults.filterChipBorder(
+                        enabled = true,
+                        selected = viewModel.isCustomSizeEnabled || showCustomInput,
+                        borderColor = Navy25,
+                        selectedBorderColor = AccentCyan
+                    )
+                )
+            }
+
+            // Custom Pixel Size Inputs
+            AnimatedVisibility(visible = showCustomInput) {
+                Surface(
+                    shape = RoundedCornerShape(12.dp),
+                    color = Navy15,
+                    border = androidx.compose.foundation.BorderStroke(1.dp, Navy25),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 10.dp)
                 ) {
-                    Text("Bake Banner", fontWeight = FontWeight.Bold, fontSize = 11.sp)
+                    Row(
+                        modifier = Modifier.padding(12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        OutlinedTextField(
+                            value = inputWidth,
+                            onValueChange = { inputWidth = it.filter { ch -> ch.isDigit() } },
+                            label = { Text("Width (px)", fontSize = 11.sp) },
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                            modifier = Modifier.weight(1f),
+                            singleLine = true,
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedTextColor = Color.White,
+                                unfocusedTextColor = Color.White,
+                                focusedBorderColor = AccentCyan,
+                                unfocusedBorderColor = Navy25
+                            )
+                        )
+
+                        OutlinedTextField(
+                            value = inputHeight,
+                            onValueChange = { inputHeight = it.filter { ch -> ch.isDigit() } },
+                            label = { Text("Height (px)", fontSize = 11.sp) },
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                            modifier = Modifier.weight(1f),
+                            singleLine = true,
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedTextColor = Color.White,
+                                unfocusedTextColor = Color.White,
+                                focusedBorderColor = AccentCyan,
+                                unfocusedBorderColor = Navy25
+                            )
+                        )
+
+                        Button(
+                            onClick = {
+                                if (inputWidth.isNotBlank() && inputHeight.isNotBlank()) {
+                                    viewModel.setCustomSize(inputWidth, inputHeight)
+                                }
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = AccentCyan),
+                            shape = RoundedCornerShape(8.dp)
+                        ) {
+                            Text("Apply", color = Navy10, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                        }
+                    }
                 }
             }
+
+            Spacer(modifier = Modifier.height(18.dp))
+
+            // ── 3. Background Change Toolbar ──────────────────────────────
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "Background Tools (Offline ML Kit)",
+                    color = Color.White,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 15.sp
+                )
+                Text("Zero Latency", color = Color.Gray, fontSize = 11.sp)
+            }
+
+            Spacer(modifier = Modifier.height(10.dp))
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                // Solid White
+                Button(
+                    onClick = { viewModel.changeBackground(AndroidColor.WHITE) },
+                    colors = ButtonDefaults.buttonColors(containerColor = Color.White),
+                    modifier = Modifier.weight(1f),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Text("Solid White", color = Color.Black, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                }
+
+                // Sky Blue
+                Button(
+                    onClick = { viewModel.changeBackground(AndroidColor.parseColor("#B0C4DE")) },
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFB0C4DE)),
+                    modifier = Modifier.weight(1f),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Text("Sky Blue", color = Color.Black, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                }
+
+                // Reset
+                OutlinedButton(
+                    onClick = { viewModel.resetImage() },
+                    colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.White),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, Navy25),
+                    modifier = Modifier.weight(0.9f),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Icon(Icons.Rounded.Refresh, contentDescription = "Reset", tint = Color.LightGray, modifier = Modifier.size(16.dp))
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text("Reset", fontSize = 12.sp)
+                }
+            }
+
+            Spacer(modifier = Modifier.height(24.dp))
         }
     }
 }

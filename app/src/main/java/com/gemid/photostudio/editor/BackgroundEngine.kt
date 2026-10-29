@@ -52,6 +52,17 @@ object BackgroundEngine {
     }
 
     /**
+     * Removes the background using offline ML Kit and replaces with specified ARGB color.
+     */
+    suspend fun removeAndReplaceBackground(
+        sourceBitmap: Bitmap,
+        colorArgb: Int
+    ): Bitmap = withContext(Dispatchers.Default) {
+        val mask = generateForegroundMask(sourceBitmap)
+        return@withContext applyMaskToBitmap(sourceBitmap, mask, colorArgb)
+    }
+
+    /**
      * Extracts an 8-bit foreground alpha mask (0 = background, 255 = foreground)
      * using Google ML Kit Selfie Segmentation with automatic color-distance fallback.
      */
